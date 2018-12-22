@@ -3,15 +3,18 @@ var app = express();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
 const { spawn  } = require('child_process');
-
+const PORT = 8080;
 const child = spawn('scala',['main.scala','ciaoooo']);
 
-
+function isBlank(str) {
+  return (!str || /^\s*$/.test(str));
+}
 child.stdout.on('data', (data) => {
-  console.log(`${data}`);
+  if(!isBlank(data)) console.log(`OUTPUT from SCALA: ${data}`);
 });
+
 child.stderr.on('data', (data) => {
-  console.log(`${data}`);
+  console.log(`ERROR from SCALA: ${data}`);
 });
  
 app.use(express.static(__dirname + '/public'));
@@ -33,6 +36,6 @@ io.on('connection', function(socket){
     });
 });
 
-http.listen(3000, function(){
-  console.log('listening on *:3000');
+http.listen(PORT,'localhost', function(){
+  console.log('listening on '+http.address().address+ ':' + http.address().port);
 });
