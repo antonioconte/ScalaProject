@@ -4,7 +4,7 @@
 		module="helpfulnessrank$sbt_2.12"
 		revision="0.1"
 		status="integration"
-		publication="20190119182024"
+		publication="20190120153237"
 	/>
 	<configurations>
 		<conf name="compile" visibility="public" description=""/>

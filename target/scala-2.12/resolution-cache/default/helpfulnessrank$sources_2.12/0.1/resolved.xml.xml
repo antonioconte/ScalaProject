@@ -4,7 +4,7 @@
 		module="helpfulnessrank$sources_2.12"
 		revision="0.1"
 		status="integration"
-		publication="20190119182029"
+		publication="20190120153240"
 	/>
 	<configurations>
 		<conf name="default" visibility="public" description=""/>

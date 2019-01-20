@@ -1,6 +1,7 @@
 package Utils
 
 import classes.User
+import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
@@ -18,5 +19,10 @@ object Util {
       val initHelpfulness = if (all == 0) 0 else localHelpfulnessInit(top,all)
       (fields(1), new User(fields(4),fields(3).toInt,initHelpfulness))
     }).groupByKey().persist()
+  }
+
+
+  def disableWarning(): Unit = {
+    Logger.getLogger("org").setLevel(Level.OFF)
   }
 }
