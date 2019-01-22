@@ -36,13 +36,14 @@ object Main {
     dove UtentiRiceventi è l'insieme degli utenti con helpfulness minore di X ma che
     hanno votato (rating) come X
     * */
-    val orderLinks = partitionedRDD.values.flatMap(users => users.map(p => (p, users.filter(
-      refUser => p.helpfulness > refUser.helpfulness && p.rating == refUser.rating
-    ))))
+    val orderLinks = partitionedRDD.flatMap{case (key,users) => users.map(p => (p, users.filter(
+      refUser => p.helpfulness > refUser.helpfulness && p.rating == refUser.rating ), key
+    ))}
+
     /* ogni utente "donatore" deve conoscere la sua helpfulness e la lista dei destinatari
     (X, (LISTADestinatari, Y) X deve dividere Y con LISTADestinatari
     tale struttura serve per il calcolo del contributo per ogni utente nella LISTADestinatari */
-    val listaAdiacenza =orderLinks.map(pair => (pair._1.idUser -> (pair._2,pair._1.helpfulness)))
+    val listaAdiacenza =orderLinks.map(pair => (pair._1.idUser -> (pair._2,pair._1.helpfulness,pair._3)))
     printPartizione(listaAdiacenza) //in Util.scala
 
     /* Ora si calcolano le coppie (ricevente, contributo)
@@ -50,21 +51,39 @@ object Main {
     dove la chiave è il ricevente che deve sommare alla propria helpfulness
     un valore pari a value (contributo_ricevuto)
     * */
-    println("-------Contributi (y,contributo_ricevuto) y deve ricevere un contrib pari a value-------------")
+    println("----Contributi (y,(value, idArt)) y deve ricevere un contrib pari a value per aver commentato lo stesso idArt -------------")
     val contribs = listaAdiacenza.flatMap{
       pair => {   // per ogni coppia (Donatore,(ListaDest, myHelp)
         val currentId = pair._1
         val helpfulnessCurrent = pair._2._2
         val E = pair._2._1.size
+        val idArt  = pair._2._3
         //     HowMuch? => myHelp/Lambda*|Nodi con helpfulness minori della mia|
         val contrib = if (E != 0) helpfulnessCurrent / (E * LAMBA) else 0
-        pair._2._1.map(u => (currentId, u.idUser-> contrib))
-    }}.mapPartitions(
-      part => part.map( p => (p._2._1 -> p._2._2)),true
-    )
+        pair._2._1.map(_.idUser-> (contrib,idArt))
+    }}
     printPartizione(contribs) //in Util.scala
 
+    /* (1.) Raggruppamento per articolo Y per ogni partizione in quanto ci possono essere più articoli
+    * nella stessa partizione
+    *  (2.) Raggruppamento per idUtente e calcolo la somma dei contributi
+    *  per l'utente X relativo all'articolo Y */
 
+    println("--------SOMMA CONTRIBS PER USER (stesso articolo)------------")
+    val aggrContrs =  contribs.mapPartitions({ it =>
+      it.toList.groupBy(_._2._2).iterator.map(   // 1.
+        x => (
+          x._1,
+          x._2.groupBy(_._1).mapValues(          // 2. somma dei contributi
+            _.foldLeft(0f) {                     // .groupBy --> (idUser,(contributo,idArticolo)
+              case (acc, (_,(b,_))) => acc + b   // estraggo il valore del contributo e incremento acc
+            })                                   // che inizialmente è 0 (accumulatore)
+        )
+      )
+    }, preservesPartitioning = true)
+    printPartizione(aggrContrs)
+    println("---------------------")
+    //TODO: CALCOLARE LA HELPFULNESS LOCALE
 
     /*
     * BISOGNA RAGRUPPARE LE CHIAVI UTILIZZANDO LE NARROW TRASFORMATIONS
@@ -106,6 +125,12 @@ object Main {
     * http://localhost:4040/
     * se localghost=true: nella console di intellj per stoppare spark
     * inserire un carattere e premere invio
+    *
+    * NOTE: https://stackoverflow.com/questions/41629953/running-groupbykey-reducebukey-on-partitioned-data-but-with-different-key
+    * RDD.mapPartitions({ it =>
+    *       it.toList.groupBy(_._1).mapValues(_.size) // some grouping + reducing the result
+    *       .iterator
+    * }, preservesPartitioning = true)
     * */
     if (localhost) new Scanner(System.in).nextLine()
     sc.stop()
