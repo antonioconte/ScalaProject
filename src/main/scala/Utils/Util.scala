@@ -25,4 +25,11 @@ object Util {
   def disableWarning(): Unit = {
     Logger.getLogger("org").setLevel(Level.OFF)
   }
+
+  def printPartizione[T](value: RDD[T]): Unit ={
+    value.mapPartitionsWithIndex(
+      (index, it) => it.toList.map(p => println(s"PARTIZIONE:${index}", p )).iterator
+    ).collect()
+  }
+
 }
