@@ -12,12 +12,15 @@ object Util {
     sc.textFile(path).mapPartitionsWithIndex {
       (idx, iter) => if (idx == 0) iter.drop(1) else iter
     }.map(r => {
-      val fields = r.split(";")
-      var top_all = fields(2).toString.split(",")
-      var top = top_all(0).substring(1).toFloat
-      var all = top_all(1).dropRight(1).substring(1).toFloat
+
+
+      val fields = r.split(",")
+      var top = fields(2).substring(2).toFloat
+      var all = fields(3).dropRight(2).substring(1).toFloat
       val initHelpfulness = if (all == 0) 0 else localHelpfulnessInit(top,all)
-      (fields(1), new User(fields(4),fields(3).toInt,initHelpfulness))
+      //idArt -> (idUser,Rating,Helpfulness)
+      (fields(1), new User(fields(5),fields(4).toInt,initHelpfulness))
+
     }).groupByKey().persist()
   }
 
@@ -27,6 +30,7 @@ object Util {
   }
 
   def printPartizione[T](value: RDD[T]): Unit ={
+    //mapPartions deve tornare un iterator
     value.mapPartitionsWithIndex(
       (index, it) => it.toList.map(p => println(s"PARTIZIONE:${index}", p )).iterator
     ).collect()

@@ -8,10 +8,11 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     disableWarning()
-    val localhost = false
+    val localhost = true
+    val debug = true //ogni printPartizione causa una collect e perciò un job
     val LAMBA = 10
     val NUM_PARTITIONS = 4
-    val path = "prod15users.csv"
+    val path = "test.csv"
 
     val conf = new SparkConf()
       .setAppName("HelpfulnessRank")
@@ -20,17 +21,17 @@ object Main {
     val sc = new SparkContext(conf)
     // Creazione RDD e partizione in base all'idArticolo
     val dataRDD = load_rdd(path, sc)
+
     /*
-    * TODO: Raffinare il partizionamento in modo da avre un bilanciamente dei dati
+    * TODO: Raffinare il partizionamento in modo da avere un bilanciamento dei dati
     * CustomPartioner è una classe creata ad hoc per tale scopo
     * codice in classes.CustomerPartitioner
     * debug = true -> stampa la locazione dei dati in base all'id dell'articolo
     * */
-    val partitionedRDD = dataRDD.partitionBy(new CustomPartitioner(NUM_PARTITIONS, true))
-    printPartizione(partitionedRDD)  //in Util.scala
+    val partitionedRDD = dataRDD.partitionBy(new CustomPartitioner(NUM_PARTITIONS, debug))
 
-
-    println("-------LISTA DI ADIACENZA-------------")
+    if(debug) printPartizione(partitionedRDD)  //in Util.scala
+    if(debug) println("-------LISTA DI ADIACENZA-------------")
     /* è una struttura intermedia fatta in tal modo :
     (UtenteDonatore X, UtentiRiceventi)
     dove UtentiRiceventi è l'insieme degli utenti con helpfulness minore di X ma che
@@ -44,14 +45,14 @@ object Main {
     (X, (LISTADestinatari, Y) X deve dividere Y con LISTADestinatari
     tale struttura serve per il calcolo del contributo per ogni utente nella LISTADestinatari */
     val listaAdiacenza =orderLinks.map(pair => (pair._1.idUser -> (pair._2,pair._1.helpfulness,pair._3)))
-    printPartizione(listaAdiacenza) //in Util.scala
+    if(debug) printPartizione(listaAdiacenza) //in Util.scala
 
     /* Ora si calcolano le coppie (ricevente, contributo)
     ottenendo per ogni partizione la lista  di tale coppia <chiave,value>
     dove la chiave è il ricevente che deve sommare alla propria helpfulness
     un valore pari a value (contributo_ricevuto)
     * */
-    println("----Contributi (y,(value, idArt)) y deve ricevere un contrib pari a value per aver commentato lo stesso idArt -------------")
+    if(debug) println("----Contributi (y,(value, idArt)) y deve ricevere un contrib pari a value per aver commentato lo stesso idArt -------------")
     val contribs = listaAdiacenza.flatMap{
       pair => {   // per ogni coppia (Donatore,(ListaDest, myHelp)
         val currentId = pair._1
@@ -62,14 +63,13 @@ object Main {
         val contrib = if (E != 0) helpfulnessCurrent / (E * LAMBA) else 0
         pair._2._1.map(_.idUser-> (contrib,idArt))
     }}
-    printPartizione(contribs) //in Util.scala
+    if(debug) printPartizione(contribs) //in Util.scala
 
     /* (1.) Raggruppamento per articolo Y per ogni partizione in quanto ci possono essere più articoli
     * nella stessa partizione
     *  (2.) Raggruppamento per idUtente e calcolo la somma dei contributi
     *  per l'utente X relativo all'articolo Y */
-
-    println("--------SOMMA CONTRIBS PER USER (stesso articolo)------------")
+    if(debug) println("--------SOMMA CONTRIBS PER USER (stesso articolo)------------")
     val aggrContrs =  contribs.mapPartitions({ it =>
       it.toList.groupBy(_._2._2).iterator.map(   // 1.
         x => (
@@ -77,12 +77,12 @@ object Main {
           x._2.groupBy(_._1).mapValues(          // 2. somma dei contributi
             _.foldLeft(0f) {                     // .groupBy --> (idUser,(contributo,idArticolo)
               case (acc, (_,(b,_))) => acc + b   // estraggo il valore del contributo e incremento acc
-            })                                   // che inizialmente è 0 (accumulatore)
+            })                                 // che inizialmente è 0 (accumulatore)
         )
       )
     }, preservesPartitioning = true)
     printPartizione(aggrContrs)
-    println("---------------------")
+    if(debug) println("---------------------")
     //TODO: CALCOLARE LA HELPFULNESS LOCALE
 
     /*
@@ -132,7 +132,10 @@ object Main {
     *       .iterator
     * }, preservesPartitioning = true)
     * */
-    if (localhost) new Scanner(System.in).nextLine()
+    if (localhost){
+      println("> WEBUI: http://localhost:4040 -  INVIO per terminare")
+      new Scanner(System.in).nextLine()
+    }
     sc.stop()
   }
 
