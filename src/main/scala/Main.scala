@@ -12,7 +12,7 @@ object Main {
     val debug = true //ogni printPartizione causa una collect e perciò un job
     val LAMBA = 10
     val NUM_PARTITIONS = 4
-    val path = "test.csv"
+    val path = "test.csv" //minidataset composto da una dozzina di utenti
 
     val conf = new SparkConf()
       .setAppName("HelpfulnessRank")
