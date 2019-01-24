@@ -8,9 +8,9 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     disableWarning()
-    val localhost = true
+    val localhost = false
     val debug = true //ogni printPartizione causa una collect e perciò un job
-    val LAMBA = 20
+    val LAMBA = 10
     val NUM_PARTITIONS = 4
     val path = "cd_amazon.csv" //minidataset composto da una dozzina di utenti
 
@@ -36,6 +36,8 @@ object Main {
     dove UtentiRiceventi è l'insieme degli utenti con helpfulness minore di X ma che
     hanno votato (rating) come X
     * */
+    val t0 = System.nanoTime() //dopo aver partizionato
+
     val orderLinks = partitionedRDD.flatMap{case (key,users) => users.map(p => (p, users.filter(
       refUser => p.helpfulness >= refUser.helpfulness && p.rating == refUser.rating ), key
     ))}
@@ -99,9 +101,11 @@ object Main {
       )
       somma
     }, preservesPartitioning = true)
+
     printPartizione(aggrContrs)
     if(debug) println("---------------------")
-
+    val t1 = System.nanoTime() //dopo aver partizionato
+    println(s"Tempo di calcolo (dopo il partizionamento): (debug=${debug}) " + (t1 - t0)/1000000 + "ms")
 
 
     /*
