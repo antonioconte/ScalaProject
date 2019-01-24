@@ -12,7 +12,7 @@ object Main {
     val debug = true //ogni printPartizione causa una collect e perciò un job
     val LAMBA = 10
     val NUM_PARTITIONS = 4
-    val path = "cd_amazon.csv" //minidataset composto da una dozzina di utenti
+    val path = "test.csv" //minidataset composto da una dozzina di utenti
 
     val conf = new SparkConf()
       .setAppName("HelpfulnessRank")
@@ -84,13 +84,13 @@ object Main {
     val aggrContrs = contribs.mapPartitions({ it =>
       var somma = it.toList.groupBy(_._2._2).iterator.map(   // 1.
         x => (
-          x._1,
-          x._2.groupBy(_._1).mapValues(               // 2. somma dei contributi e della helpfulness
-           user => {
-             var u = user(0)._2._3                    // helpfulness userRicevente
-             user.foldLeft(u) {                      // .groupBy --> (idUser,(contributo,idArticolo,helpful)
-               case (acc, (_,(b,_,_))) => {         // estraggo il valore del contributo e incremento acc
-                 var newHelp = acc + b              // che inizialmente è helpfulnessUtente
+          x._1,                                       //idArt
+          x._2.groupBy(_._1).mapValues(              // 2. raggruppamento per utenti appartenenti allo stesso articolo
+           user => {                                 // e per ogni utente somma dei contributi e della helpfulness
+             var u = user(0)._2._3                   // u = helpfulness dell'userRicevente
+             user.foldLeft(u) {                      // user ha questa struttura -> (idUser,(contributo,idArticolo,helpful)
+               case (acc, (_,(b,_,_))) => {          // estraggo il valore del contributo e incremento acc
+                 var newHelp = acc + b               // che inizialmente è helpfulnessUtente
                  if (newHelp > 1.0) 1.0f
                  else if (newHelp < -1.0) -1.0f
                  else newHelp
