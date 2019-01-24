@@ -8,7 +8,7 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     disableWarning()
-    val localhost = true
+    val localhost = false
     val debug = true //ogni printPartizione causa una collect e perciò un job
     val LAMBA = 10
     val NUM_PARTITIONS = 4
@@ -37,7 +37,7 @@ object Main {
     hanno votato (rating) come X
     * */
     val orderLinks = partitionedRDD.flatMap{case (key,users) => users.map(p => (p, users.filter(
-      refUser => p.helpfulness > refUser.helpfulness && p.rating == refUser.rating ), key
+      refUser => p.helpfulness >= refUser.helpfulness && p.rating == refUser.rating ), key
     ))}
     if(debug) println("-------COLLEGAMENTI IN BASE AL VOTO E ALLA HELPFUL-------------")
 
@@ -46,7 +46,9 @@ object Main {
     /* ogni utente "donatore" deve conoscere la sua helpfulness e la lista dei destinatari
     (X, (LISTADestinatari, Y, idArticolo) X deve dividere Y con LISTADestinatari relativo all'idArticolo
     tale struttura serve per il calcolo del contributo per ogni utente nella LISTADestinatari */
-    val listaAdiacenza =orderLinks.map(pair => (pair._1.idUser -> (pair._2,pair._1.helpfulness,pair._3)))
+    val listaAdiacenza =orderLinks.map(pair => (pair._1.idUser -> (pair._2,
+      pair._1.helpfulness,
+      pair._3)))
     if(debug) println("-------LISTA DI ADIACENZA-------------")
     if(debug) printPartizione(listaAdiacenza) //in Util.scala
 
@@ -55,29 +57,33 @@ object Main {
     dove la chiave è il ricevente che deve sommare alla propria helpfulness
     un valore pari a value (contributo_ricevuto)
     * */
-    if(debug) println("----Contributi (y,(value, idArt)) y deve ricevere un contrib pari a value per aver commentato lo stesso idArt -------------")
+    if(debug) println("----Contributi (y,(value, idArt, helpfull di y)) y deve ricevere un contrib pari a value per aver commentato lo stesso idArt -------------")
     val contribs = listaAdiacenza.flatMap{
       pair => {   // per ogni coppia (Donatore,(ListaDest, myHelp)
         val currentId = pair._1
         val helpfulnessCurrent = pair._2._2
-        val E = pair._2._1.size
+        val E = pair._2._1.size-1   //ogni lista contiene anche il contributo che l'user deve dare a se stesso (ossia 0)
+                                    //serve per ottenere la lista completa delle helpfulness
         val idArt  = pair._2._3
         //     HowMuch? => myHelp/Lambda*|Nodi con helpfulness minori della mia|
         val contrib = if (E != 0) helpfulnessCurrent / (E * LAMBA) else 0
-        pair._2._1.map(userRicevente => userRicevente.idUser-> (contrib,idArt,userRicevente.helpfulness))
+        //se l'user è lo stesso allora il contributo è 0
+        pair._2._1.map(userRicevente => userRicevente.idUser-> (
+          if( (userRicevente.idUser).eq(currentId) ) 0 else contrib,idArt,userRicevente.helpfulness))
+
     }}
     if(debug) printPartizione(contribs) //in Util.scala
 
     /* (1.) Raggruppamento per articolo Y per ogni partizione in quanto ci possono essere più articoli
     * nella stessa partizione
     *  (2.) Raggruppamento per idUtente e calcolo la somma dei contributi
-    *  per l'utente X relativo all'articolo Y */
+    *  per l'utente X relativo all'articolo Y sommando con la helpfulness */
     if(debug) println("--------SOMMA CONTRIBS E Helpfulness PER USER (stesso articolo)------------")
     val aggrContrs = contribs.mapPartitions({ it =>
       var somma = it.toList.groupBy(_._2._2).iterator.map(   // 1.
         x => (
           x._1,
-          x._2.groupBy(_._1).mapValues(               // 2. somma dei contributi
+          x._2.groupBy(_._1).mapValues(               // 2. somma dei contributi e della helpfulness
            user => {
              var u = user(0)._2._3                    // helpfulness userRicevente
              user.foldLeft(u) {                      // .groupBy --> (idUser,(contributo,idArticolo,helpful)
@@ -117,14 +123,13 @@ object Main {
     * PART1: (3,0.5)    //ART-3
     * PART1: (5,0.2)    //ART-3
     * >>>>>> FATTO : aggrContrs permette questo
-    *
-    * TODO:>>> ALLA FINE DELLE ITERAZIONI DOBBIAMO AVERE UNA STRUTTARE DEL GENERE: CALCOLARE LA HELPFULNESS LOCALE
+    * TODO:>>> ALLA FINE DELLE ITERAZIONI DOBBIAMO AVERE UNA STRUTTURA DEL GENERE: CALCOLARE LA HELPFULNESS LOCALE
     * PART0: (4, helpfulness-calcolata-dalle iter)    //ART-1
     * PART0: (3, helpfulness-calcolata-dalle iter)    //ART-1
     * PART0: (4, helpfulness-calcolata-dalle iter)    //ART-2
     * PART0: (3, helpfulness-calcolata-dalle iter)    //ART-3
     * PART0: (5, helpfulness-calcolata-dalle iter)    //ART-3
-    *
+
     * reduceByKey su RDD contenente quest'ultima struttura
     * in base ad una qualche formula di riduzione (media o poi si vede)
     * */
