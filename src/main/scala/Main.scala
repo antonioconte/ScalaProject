@@ -8,11 +8,11 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     disableWarning()
-    val localhost = false
+    val localhost = true
     val debug = true //ogni printPartizione causa una collect e perciò un job
-    val LAMBA = 10
+    val LAMBA = 20
     val NUM_PARTITIONS = 4
-    val path = "test.csv" //minidataset composto da una dozzina di utenti
+    val path = "cd_amazon.csv" //minidataset composto da una dozzina di utenti
 
     val conf = new SparkConf()
       .setAppName("HelpfulnessRank")
@@ -28,7 +28,7 @@ object Main {
     * codice in classes.CustomerPartitioner
     * debug = true -> stampa la locazione dei dati in base all'id dell'articolo
     * */
-    val partitionedRDD = dataRDD.partitionBy(new CustomPartitioner(NUM_PARTITIONS, debug))
+    val partitionedRDD = dataRDD.partitionBy(new CustomPartitioner(NUM_PARTITIONS, debug)).persist()
 
     if(debug) printPartizione(partitionedRDD)  //in Util.scala
     /* è una struttura intermedia fatta in tal modo :
@@ -46,7 +46,7 @@ object Main {
     /* ogni utente "donatore" deve conoscere la sua helpfulness e la lista dei destinatari
     (X, (LISTADestinatari, Y, idArticolo) X deve dividere Y con LISTADestinatari relativo all'idArticolo
     tale struttura serve per il calcolo del contributo per ogni utente nella LISTADestinatari */
-    val listaAdiacenza =orderLinks.map(pair => (pair._1.idUser -> (pair._2,
+    var listaAdiacenza =orderLinks.map(pair => (pair._1.idUser -> (pair._2,
       pair._1.helpfulness,
       pair._3)))
     if(debug) println("-------LISTA DI ADIACENZA-------------")
@@ -87,8 +87,13 @@ object Main {
            user => {
              var u = user(0)._2._3                    // helpfulness userRicevente
              user.foldLeft(u) {                      // .groupBy --> (idUser,(contributo,idArticolo,helpful)
-               case (acc, (_,(b,_,_))) => (acc + b)   // estraggo il valore del contributo e incremento acc
-             }                                        // che inizialmente è helpfulnessUtente
+               case (acc, (_,(b,_,_))) => {         // estraggo il valore del contributo e incremento acc
+                 var newHelp = acc + b              // che inizialmente è helpfulnessUtente
+                 if (newHelp > 1.0) 1.0f
+                 else if (newHelp < -1.0) -1.0f
+                 else newHelp
+               }
+             }
            })
         )
       )

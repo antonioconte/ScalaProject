@@ -21,7 +21,7 @@ object Util {
       //idArt -> (idUser,Rating,Helpfulness)
       (fields(1), new User(fields(5),fields(4).toInt,initHelpfulness))
 
-    }).groupByKey().persist()
+    }).groupByKey()
   }
 
 
