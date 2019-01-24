@@ -37,14 +37,16 @@ object Util {
   }
 
 
-  def running[T](pRDD: RDD[(String,Iterable[User])], LAMBDA: Int, ITER: Int, debug: Boolean):Unit = {
+  def running[T](pRDD: RDD[(String,Iterable[User])], LAMBDA: Int, ITER: Int, debug: Boolean,viewGraph:Boolean):Unit = {
     var partitionedRDD = pRDD
 
     // INIZIO ITER
     for ( i <- 1 to ITER){
 
       println(s"> INIZIO ITERAZIONE NUMERO -> ${i}")
-      printPartizione(partitionedRDD)
+
+
+      if(viewGraph)printPartizione(partitionedRDD)
       println("---------------------------------------")
 
       /* Struttura intermedia fatta in tal modo :

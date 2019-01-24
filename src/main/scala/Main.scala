@@ -9,11 +9,12 @@ object Main {
   def main(args: Array[String]): Unit = {
     disableWarning()
     val localhost = true
+    val viewGraph = true //per visualizzare lo stato del grafo all'inizio di ogni iterazione
     val debug = false //ogni printPartizione causa una collect e perciò un job
     val LAMBDA = 10
-    val ITER = 2
+    val ITER = 10
     val NUM_PARTITIONS = 4
-    val path = "test.csv" //minidataset composto da una dozzina di utenti
+    val path = "cd_amazon.csv" //minidataset composto da una dozzina di utenti
 
     val conf = new SparkConf()
       .setAppName("HelpfulnessRank")
@@ -35,7 +36,7 @@ object Main {
 
     val t0 = System.nanoTime() //dopo aver partizionato
 
-    running(partitionedRDD,LAMBDA,ITER,false)
+    running(partitionedRDD,LAMBDA,ITER,debug,viewGraph)
 
     val t1 = System.nanoTime() //dopo aver partizionato
 
