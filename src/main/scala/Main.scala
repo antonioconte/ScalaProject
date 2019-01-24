@@ -9,12 +9,12 @@ object Main {
   def main(args: Array[String]): Unit = {
     disableWarning()
     val localhost = true
-    val viewGraph = true //per visualizzare lo stato del grafo all'inizio di ogni iterazione
+    val viewGraph = false //per visualizzare lo stato del grafo all'inizio di ogni iterazione
     val debug = false //ogni printPartizione causa una collect e perciò un job
     val LAMBDA = 10
     val ITER = 10
     val NUM_PARTITIONS = 4
-    val path = "cd_amazon.csv" //minidataset composto da una dozzina di utenti
+    val path = "test.csv" //minidataset composto da una dozzina di utenti
 
     val conf = new SparkConf()
       .setAppName("HelpfulnessRank")
@@ -34,13 +34,13 @@ object Main {
 
     if(debug) printPartizione(partitionedRDD)  //in Util.scala
 
-    val t0 = System.nanoTime() //dopo aver partizionato
+    val t0 = System.nanoTime()
 
     running(partitionedRDD,LAMBDA,ITER,debug,viewGraph)
 
     val t1 = System.nanoTime() //dopo aver partizionato
 
-    println(s"Tempo di calcolo (dopo il partizionamento): (debug=${debug}, ITER=${ITER}, LAMBDA=${LAMBDA}) " + (t1 - t0)/1000000 + "ms")
+    println(s"Tempo di calcolo: (debug=${debug}, ITER=${ITER}, LAMBDA=${LAMBDA}) " + (t1 - t0)/1000000 + "ms")
 
     if (localhost){
     /* Utile per non far terminare Spark e quindi accedere alla WebUI
