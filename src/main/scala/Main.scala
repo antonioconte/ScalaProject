@@ -1,7 +1,7 @@
 import java.util.Scanner
 
-import Utils.Util._   // load_rdd, printPartizione, localHelpfulness
-import classes.CustomPartitioner
+import Utils.Util._
+import classes.{CustomPartitioner, User}
 import org.apache.spark.{SparkConf, SparkContext}
 
 object Main {
@@ -10,7 +10,7 @@ object Main {
     disableWarning()
     val localhost = false
     val debug = true //ogni printPartizione causa una collect e perciò un job
-    val LAMBA = 10
+    val LAMBDA = 10
     val NUM_PARTITIONS = 4
     val path = "test.csv" //minidataset composto da una dozzina di utenti
 
@@ -28,7 +28,7 @@ object Main {
     * codice in classes.CustomerPartitioner
     * debug = true -> stampa la locazione dei dati in base all'id dell'articolo
     * */
-    val partitionedRDD = dataRDD.partitionBy(new CustomPartitioner(NUM_PARTITIONS, debug)).persist()
+    var partitionedRDD = dataRDD.partitionBy(new CustomPartitioner(NUM_PARTITIONS, debug))
 
     if(debug) printPartizione(partitionedRDD)  //in Util.scala
     /* è una struttura intermedia fatta in tal modo :
@@ -38,7 +38,7 @@ object Main {
     * */
     val t0 = System.nanoTime() //dopo aver partizionato
 
-    val orderLinks = partitionedRDD.flatMap{case (key,users) => users.map(p => (p, users.filter(
+    var orderLinks = partitionedRDD.flatMap{case (key,users) => users.map(p => (p, users.filter(
       refUser => p.helpfulness >= refUser.helpfulness && p.rating == refUser.rating ), key
     ))}
     if(debug) println("-------COLLEGAMENTI IN BASE AL VOTO E ALLA HELPFUL-------------")
@@ -68,10 +68,10 @@ object Main {
                                     //serve per ottenere la lista completa delle helpfulness
         val idArt  = pair._2._3
         //     HowMuch? => myHelp/Lambda*|Nodi con helpfulness minori della mia|
-        val contrib = if (E != 0) helpfulnessCurrent / (E * LAMBA) else 0
+        val contrib = if (E != 0) helpfulnessCurrent / (E * LAMBDA) else 0
         //se l'user è lo stesso allora il contributo è 0
         pair._2._1.map(userRicevente => userRicevente.idUser-> (
-          if( (userRicevente.idUser).eq(currentId) ) 0 else contrib,idArt,userRicevente.helpfulness))
+          if( (userRicevente.idUser).eq(currentId) ) 0 else contrib,idArt,userRicevente.helpfulness,userRicevente.rating))
 
     }}
     if(debug) printPartizione(contribs) //in Util.scala
@@ -81,28 +81,33 @@ object Main {
     *  (2.) Raggruppamento per idUtente e calcolo la somma dei contributi
     *  per l'utente X relativo all'articolo Y sommando con la helpfulness */
     if(debug) println("--------SOMMA CONTRIBS E Helpfulness PER USER (stesso articolo)------------")
-    val aggrContrs = contribs.mapPartitions({ it =>
-      var somma = it.toList.groupBy(_._2._2).iterator.map(   // 1.
-        x => (
-          x._1,                                       //idArt
-          x._2.groupBy(_._1).mapValues(              // 2. raggruppamento per utenti appartenenti allo stesso articolo
+    partitionedRDD = contribs.mapPartitions({ it =>
+      it.toList.groupBy(_._2._2).iterator
+        .map(   // 1.
+        x =>
+          x._1 ->                                      //idArt, x._2 è la lista degli user
+          x._2.groupBy(_._1)
+            .mapValues(              // 2. raggruppamento per idUser appartenenti allo stesso articolo
            user => {                                 // e per ogni utente somma dei contributi e della helpfulness
-             var u = user(0)._2._3                   // u = helpfulness dell'userRicevente
-             user.foldLeft(u) {                      // user ha questa struttura -> (idUser,(contributo,idArticolo,helpful)
-               case (acc, (_,(b,_,_))) => {          // estraggo il valore del contributo e incremento acc
-                 var newHelp = acc + b               // che inizialmente è helpfulnessUtente
+             var u = user(0)                        //prendo il primo utente nella lista in quanto l'unico valore che varia
+                                                    //è il contributo che verra accumulato dalla foldLeft per calcolare la nuova helpfulness
+             var userOldHelp = u._2._3              // helpfulness dell'user prima dell'update
+             var newValue = user.foldLeft(userOldHelp) {                      // user ha questa struttura -> (idUser,(contributo,idArticolo,helpful,rating)
+               case (acc, (idUser,(singleContr,idArt,help,rating))) => {          // estraggo il valore del contributo e incremento acc
+                 var newHelp = acc + singleContr               // che inizialmente è helpfulnessUtente
                  if (newHelp > 1.0) 1.0f
                  else if (newHelp < -1.0) -1.0f
                  else newHelp
                }
              }
-           })
-        )
+             new User(u._1,u._2._4,newValue)        //creo nuovo oggetto contenente le info necessarie per iniziare una nuova iterazione
+           }
+          ).map(x => x._2)   //creo la lista degli oggetti utente
+
       )
-      somma
     }, preservesPartitioning = true)
 
-    printPartizione(aggrContrs)
+    printPartizione(partitionedRDD)
     if(debug) println("---------------------")
     val t1 = System.nanoTime() //dopo aver partizionato
     println(s"Tempo di calcolo (dopo il partizionamento): (debug=${debug}) " + (t1 - t0)/1000000 + "ms")
