@@ -17,7 +17,7 @@ object Util {
       var all = fields(3).dropRight(2).substring(1).toFloat
       val initHelpfulness = if (all == 0) 0 else localHelpfulnessInit(top,all)
       //idArt -> (idUser,Rating,Helpfulness)
-      (fields(1), new User(fields(5),fields(4).toInt,initHelpfulness))
+      (fields(1), User(fields(5),fields(4).toInt,initHelpfulness))
     }).groupByKey()
   }
 
@@ -29,7 +29,7 @@ object Util {
   def printPartizione[T](value: RDD[T]): Unit ={
     //mapPartions deve tornare un iterator
     value.mapPartitionsWithIndex(
-      (index, it) => it.toList.map(p => println(s"PARTIZIONE:${index}", p )).iterator
+      (index, it) => it.toList.map(println(s"PARTIZIONE:${index}",_)).iterator
     ).collect()
   }
 
