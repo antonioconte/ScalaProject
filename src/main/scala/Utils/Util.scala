@@ -157,17 +157,9 @@ object Util {
     * in base ad una qualche formula di riduzione (media o poi si vede) */
     //creazione struttura idUser -> helpfulness in modo da effettuare successivamente una groupByKey e sommare
     //i risultati interemedi calcolati nei vari nodi relativi allo stesso utente
-    var ranks = partitionedRDD.flatMap{case(idArt,users) => users.map( user => user.idUser->user.helpfulness) }.groupByKey()
-    if(debug) ranks.collect().foreach(println) //prina della somma
-    println("------RESULT---------")
-    var result = ranks.map{case (idUser,listHelpful) => {
-      var size = listHelpful.size
-      var sumHelpful = listHelpful.foldLeft(0f){
-        case (acc,value) => acc+value
-      }
-      (idUser, sumHelpful/size )
-    }}
-    result.collect().foreach(println)
+    getResult(partitionedRDD, debug)
+
+
 
     /*
     * >>> MAPPARTITIONS ->
@@ -179,6 +171,22 @@ object Util {
     * */
     if(debug) println("---------------------")
 
+  }
+
+
+  //last = false allora prendo il risultato intermedio
+  def getResult(partitionedRDD: RDD[(String,Iterable[User])], debug:Boolean) = {
+    var ranks = partitionedRDD.flatMap{case(idArt,users) => users.map( user => user.idUser->user.helpfulness) }.groupByKey()
+    if(debug) ranks.collect().foreach(println) //prina della somma
+    println("------RESULT---------")
+    var result = ranks.map{case (idUser,listHelpful) => {
+      var size = listHelpful.size
+      var sumHelpful = listHelpful.foldLeft(0f){
+        case (acc,value) => acc+value
+      }
+      (idUser, sumHelpful/size )
+    }}
+    result.collect().foreach(println)
   }
 
 }
