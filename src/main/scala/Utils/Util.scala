@@ -152,8 +152,11 @@ object Util {
           )
       }, preservesPartitioning = true)
     }
-    //creaziobe struttura idUser -> helpfulness in modo da effettuare successivamente una groupByKey e sommare
-    //i risultati interemedi calcolari nei vari nodi relativi allo stesso utente
+
+    /* groupByKey su RDD contenente quest'ultima struttura
+    * in base ad una qualche formula di riduzione (media o poi si vede) */
+    //creazione struttura idUser -> helpfulness in modo da effettuare successivamente una groupByKey e sommare
+    //i risultati interemedi calcolati nei vari nodi relativi allo stesso utente
     var ranks = partitionedRDD.flatMap{case(idArt,users) => users.map( user => user.idUser->user.helpfulness) }.groupByKey()
     if(debug) ranks.collect().foreach(println) //prina della somma
     println("------RESULT---------")
@@ -165,13 +168,6 @@ object Util {
       (idUser, sumHelpful/size )
     }}
     result.collect().foreach(println)
-
-
-     //fineITer
-
-    /* reduceByKey su RDD contenente quest'ultima struttura
-    * in base ad una qualche formula di riduzione (media o poi si vede)
-    * */
 
     /*
     * >>> MAPPARTITIONS ->

@@ -14,7 +14,7 @@ object Main {
     val LAMBDA = 10
     val ITER = 10
     val NUM_PARTITIONS = 4
-    val path = "cd_amazon.csv" //minidataset composto da una dozzina di utenti
+    val path = "test.csv" //minidataset composto da una dozzina di utenti
 
     val conf = new SparkConf()
       .setAppName("HelpfulnessRank")
