@@ -12,15 +12,12 @@ object Util {
     sc.textFile(path).mapPartitionsWithIndex {
       (idx, iter) => if (idx == 0) iter.drop(1) else iter
     }.map(r => {
-
-
       val fields = r.split(",")
       var top = fields(2).substring(2).toFloat
       var all = fields(3).dropRight(2).substring(1).toFloat
       val initHelpfulness = if (all == 0) 0 else localHelpfulnessInit(top,all)
       //idArt -> (idUser,Rating,Helpfulness)
       (fields(1), new User(fields(5),fields(4).toInt,initHelpfulness))
-
     }).groupByKey()
   }
 
@@ -42,10 +39,7 @@ object Util {
 
     // INIZIO ITER
     for ( i <- 1 to ITER){
-
       println(s"> INIZIO ITERAZIONE NUMERO -> ${i}")
-
-
       if(viewGraph)printPartizione(partitionedRDD)
       println("---------------------------------------")
 
@@ -61,15 +55,17 @@ object Util {
         refUser => p.helpfulness >= refUser.helpfulness && p.rating == refUser.rating ), key
       ))}
       if(debug) println("-------COLLEGAMENTI IN BASE AL VOTO E ALLA HELPFUL-------------")
-
       if(debug) printPartizione(orderLinks) //in Util.scala
-
       /* ogni utente "donatore" deve conoscere la sua helpfulness e la lista dei destinatari
       (X, (LISTADestinatari, Y, idArticolo) X deve dividere Y con LISTADestinatari relativo all'idArticolo
       tale struttura serve per il calcolo del contributo per ogni utente nella LISTADestinatari */
-      var listaAdiacenza =orderLinks.map(pair => (pair._1.idUser -> (pair._2,
-        pair._1.helpfulness,
-        pair._3)))
+      var listaAdiacenza = orderLinks.map(pair =>
+        pair._1.idUser -> (
+          pair._2,
+          pair._1.helpfulness,
+          pair._3
+        )
+      )
       if(debug) println("-------LISTA DI ADIACENZA-------------")
       if(debug) printPartizione(listaAdiacenza) //in Util.scala
 
@@ -138,7 +134,7 @@ object Util {
                 x._2.groupBy(_._1)
                   .mapValues(              // 2. raggruppamento per idUser appartenenti allo stesso articolo
                     user => {                                 // e per ogni utente somma dei contributi e della helpfulness
-                      var u = user(0)                        //prendo il primo utente nella lista in quanto l'unico valore che varia
+                      var u = user.head                        //prendo il primo utente nella lista in quanto l'unico valore che varia
                     //è il contributo che verra accumulato dalla foldLeft per calcolare la nuova helpfulness
                     var userOldHelp = u._2._3              // helpfulness dell'user prima dell'update
                     var newValue = user.foldLeft(userOldHelp) {                      // user ha questa struttura -> (idUser,(contributo,idArticolo,helpful,rating)
@@ -151,14 +147,26 @@ object Util {
                     }
                       new User(u._1,u._2._4,newValue)        //creo nuovo oggetto contenente le info necessarie per iniziare una nuova iterazione
                     }
-                  ).map(x => x._2)   //creo la lista degli oggetti utente
+                  ).values    //creo la lista degli oggetti utente
 
           )
       }, preservesPartitioning = true)
-
-
-      partitionedRDD.collect()
     }
+    //creaziobe struttura idUser -> helpfulness in modo da effettuare successivamente una groupByKey e sommare
+    //i risultati interemedi calcolari nei vari nodi relativi allo stesso utente
+    var ranks = partitionedRDD.flatMap{case(idArt,users) => users.map( user => user.idUser->user.helpfulness) }.groupByKey()
+    if(debug) ranks.collect().foreach(println) //prina della somma
+    println("------RESULT---------")
+    var result = ranks.map{case (idUser,listHelpful) => {
+      var size = listHelpful.size
+      var sumHelpful = listHelpful.foldLeft(0f){
+        case (acc,value) => acc+value
+      }
+      (idUser, sumHelpful/size )
+    }}
+    result.collect().foreach(println)
+
+
      //fineITer
 
     /* reduceByKey su RDD contenente quest'ultima struttura
