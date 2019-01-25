@@ -37,11 +37,13 @@ object Util {
   def running[T](pRDD: RDD[(String,Iterable[User])], LAMBDA: Int, ITER: Int, debug: Boolean,viewGraph:Boolean):Unit = {
     var partitionedRDD = pRDD
 
+    println("------ PRIMA DELLE ITERAZIONI -----")
+    partitionedRDD.flatMap{case(idArt,users) => users.map( user => user.idUser->user.helpfulness) }.groupByKey().collect().foreach(println)
+
     // INIZIO ITER
     for ( i <- 1 to ITER){
       println(s"> INIZIO ITERAZIONE NUMERO -> ${i}")
       if(viewGraph)printPartizione(partitionedRDD)
-      println("---------------------------------------")
 
       /* Struttura intermedia fatta in tal modo :
       *  (UtenteDonatore X, UtentiRiceventi,idArticolo)
@@ -175,9 +177,10 @@ object Util {
 
 
   //last = false allora prendo il risultato intermedio
-  def getResult(partitionedRDD: RDD[(String,Iterable[User])], debug:Boolean) = {
+  def getResult(partitionedRDD: RDD[(String,Iterable[User])], debug: Boolean) = {
     var ranks = partitionedRDD.flatMap{case(idArt,users) => users.map( user => user.idUser->user.helpfulness) }.groupByKey()
-    if(debug) ranks.collect().foreach(println) //prina della somma
+    println("------ALLA FINE DELLE ITER---------")
+    ranks.collect().foreach(println) //prina della somma
     println("------RESULT---------")
     var result = ranks.map{case (idUser,listHelpful) => {
       var size = listHelpful.size
@@ -188,5 +191,4 @@ object Util {
     }}
     result.collect().foreach(println)
   }
-
 }
