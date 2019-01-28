@@ -4,15 +4,18 @@ import Utils.Util._
 import classes.CustomPartitioner
 import org.apache.spark.{SparkConf, SparkContext}
 
+
+
 object Main {
 
   def main(args: Array[String]): Unit = {
+
     disableWarning()
-    val localhost = true
+    val localhost = false
     val viewGraph = false //per visualizzare lo stato del grafo all'inizio di ogni iterazione
     val debug = false //ogni printPartizione causa una collect e perciò un job
     val LAMBDA = 20
-    val ITER = 10
+    val ITER = 1
     val NUM_PARTITIONS = 4
     val path = "test.csv" //minidataset composto da una dozzina di utenti
 
@@ -21,6 +24,9 @@ object Main {
       .setMaster("local[*]")
 
     val sc = new SparkContext(conf)
+
+
+
     // Creazione RDD e partizione in base all'idArticolo
     val dataRDD = load_rdd(path, sc)
 

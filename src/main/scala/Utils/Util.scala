@@ -4,6 +4,10 @@ import classes.User
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
+import net.liftweb.json._
+import net.liftweb.json.Serialization.write
+import java.io._
+case class userJson(id: String,rank: Float)
 
 object Util {
   def localHelpfulnessInit(top: Float, all: Float) = (top - (all - top))/all
@@ -180,7 +184,7 @@ object Util {
   def getResult(partitionedRDD: RDD[(String,Iterable[User])], debug: Boolean) = {
     var ranks = partitionedRDD.flatMap{case(idArt,users) => users.map( user => user.idUser->user.helpfulness) }.groupByKey()
     println("------ALLA FINE DELLE ITER---------")
-    ranks.collect().foreach(println) //prina della somma
+    ranks.collect().foreach(println) //prima della somma
     println("------RESULT---------")
     var result = ranks.map{case (idUser,listHelpful) => {
       var size = listHelpful.size
@@ -189,6 +193,19 @@ object Util {
       }
       (idUser, sumHelpful/size )
     }}
-    result.collect().foreach(println)
+
+    //// Json
+    var stringJson = ""
+    var arrList = result.collect()
+    var jsonList = arrList.map(u => userJson(u._1.replace("\"",""),u._2))
+    jsonList.foreach(println)
+    val jsonString = write(jsonList)(DefaultFormats)
+    val pw = new PrintWriter(new File("nodes.json" ))
+    pw.write(jsonString)
+    pw.close()
+
+    println(jsonString)
+    //// endJson
+//    result.collect().foreach(println)
   }
 }
