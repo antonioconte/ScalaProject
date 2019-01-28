@@ -15,9 +15,9 @@ object Main {
     val viewGraph = false //per visualizzare lo stato del grafo all'inizio di ogni iterazione
     val debug = false //ogni printPartizione causa una collect e perciò un job
     val LAMBDA = 20
-    val ITER = 1
+    val ITER = 10
     val NUM_PARTITIONS = 4
-    val path = "test.csv" //minidataset composto da una dozzina di utenti
+    val path = "cd_amazon1k.csv" //minidataset composto da una dozzina di utenti
 
     val conf = new SparkConf()
       .setAppName("HelpfulnessRank")

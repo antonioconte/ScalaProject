@@ -8,6 +8,7 @@ import net.liftweb.json._
 import net.liftweb.json.Serialization.write
 import java.io._
 case class userJson(id: String,rank: Float)
+case class linkJson(source: String,target: String)
 
 object Util {
   def localHelpfulnessInit(top: Float, all: Float) = (top - (all - top))/all
@@ -36,11 +37,25 @@ object Util {
       (index, it) => it.toList.map(println(s"PARTIZIONE:${index}",_)).iterator
     ).collect()
   }
+  def linkedListToJson[T](lista: RDD[(String,(Iterable[User],Float,String))]) = {
+    var list = lista.collect()
+    var jsonList = list.flatMap(u => {
+      var idSource = u._1
+      var targetList = u._2._1.filter(user => !(user.idUser).eq(u._1))
+      targetList.map( u => linkJson(idSource.replace("\"",""), u.idUser.replace("\"","")))
+    })
+    jsonList.foreach(println)
+    val jsonString = write(jsonList)(DefaultFormats)
+    val pw = new PrintWriter(new File("../GUI/public/links.json" ))
+    pw.write(jsonString)
+    pw.close()
+  }
 
 
   def running[T](pRDD: RDD[(String,Iterable[User])], LAMBDA: Int, ITER: Int, debug: Boolean,viewGraph:Boolean):Unit = {
     var partitionedRDD = pRDD
 
+    var firstTime = true
     println("------ PRIMA DELLE ITERAZIONI -----")
     partitionedRDD.flatMap{case(idArt,users) => users.map( user => user.idUser->user.helpfulness) }.groupByKey().collect().foreach(println)
 
@@ -72,6 +87,10 @@ object Util {
           pair._3
         )
       )
+      if(firstTime){
+        linkedListToJson(listaAdiacenza)
+        firstTime = false
+      }
       if(debug) println("-------LISTA DI ADIACENZA-------------")
       if(debug) printPartizione(listaAdiacenza) //in Util.scala
 
@@ -157,13 +176,17 @@ object Util {
 
           )
       }, preservesPartitioning = true)
+
+      getResult(partitionedRDD, debug)
+
+      Thread.sleep(10000)
     }
 
     /* groupByKey su RDD contenente quest'ultima struttura
     * in base ad una qualche formula di riduzione (media o poi si vede) */
     //creazione struttura idUser -> helpfulness in modo da effettuare successivamente una groupByKey e sommare
     //i risultati interemedi calcolati nei vari nodi relativi allo stesso utente
-    getResult(partitionedRDD, debug)
+//    getResult(partitionedRDD, debug)
 
 
 
@@ -183,8 +206,11 @@ object Util {
   //last = false allora prendo il risultato intermedio
   def getResult(partitionedRDD: RDD[(String,Iterable[User])], debug: Boolean) = {
     var ranks = partitionedRDD.flatMap{case(idArt,users) => users.map( user => user.idUser->user.helpfulness) }.groupByKey()
-    println("------ALLA FINE DELLE ITER---------")
-    ranks.collect().foreach(println) //prima della somma
+
+    if(debug){
+      println("------ALLA FINE DELLE ITER---------")
+      ranks.collect().foreach(println) //prima della somma
+    }
     println("------RESULT---------")
     var result = ranks.map{case (idUser,listHelpful) => {
       var size = listHelpful.size
@@ -195,15 +221,13 @@ object Util {
     }}
 
     //// Json
-    var stringJson = ""
     var arrList = result.collect()
     var jsonList = arrList.map(u => userJson(u._1.replace("\"",""),u._2))
     jsonList.foreach(println)
     val jsonString = write(jsonList)(DefaultFormats)
-    val pw = new PrintWriter(new File("nodes.json" ))
+    val pw = new PrintWriter(new File("../GUI/public/nodes.json" ))
     pw.write(jsonString)
     pw.close()
-
     println(jsonString)
     //// endJson
 //    result.collect().foreach(println)
