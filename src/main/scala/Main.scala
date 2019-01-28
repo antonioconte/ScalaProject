@@ -5,7 +5,6 @@ import classes.CustomPartitioner
 import org.apache.spark.{SparkConf, SparkContext}
 
 
-
 object Main {
 
   def main(args: Array[String]): Unit = {
@@ -36,21 +35,24 @@ object Main {
     * */
     var partitionedRDD = dataRDD.partitionBy(new CustomPartitioner(NUM_PARTITIONS, debug)).persist()
 
-    if(debug) printPartizione(partitionedRDD)  //in Util.scala
+    if (debug) printPartizione(partitionedRDD) //in Util.scala
 
     val t0 = System.nanoTime()
 
-    running(partitionedRDD,LAMBDA,ITER,debug,viewGraph)
+    //  O UNA O L'ALTRA
+    //    running(partitionedRDD,LAMBDA,ITER,debug,viewGraph)
+    runAllInOneAlgorithm(path, sc, LAMBDA, ITER, debug, NUM_PARTITIONS)
+
 
     val t1 = System.nanoTime() //dopo aver partizionato
 
-    println(s"Tempo di calcolo: (debug=${debug}, ITER=${ITER}, LAMBDA=${LAMBDA}) " + (t1 - t0)/1000000 + "ms")
+    println(s"Tempo di calcolo: (debug=${debug}, ITER=${ITER}, LAMBDA=${LAMBDA}) " + (t1 - t0) / 1000000 + "ms")
 
-    if (localhost){
-    /* Utile per non far terminare Spark e quindi accedere alla WebUI
-    * http://localhost:4040/
-    * se localghost=true: nella console di intellj per stoppare spark
-    * inserire un carattere e premere invio */
+    if (localhost) {
+      /* Utile per non far terminare Spark e quindi accedere alla WebUI
+      * http://localhost:4040/
+      * se localghost=true: nella console di intellj per stoppare spark
+      * inserire un carattere e premere invio */
       println("> WEBUI: http://localhost:4040 -  INVIO per terminare")
       new Scanner(System.in).nextLine()
     }
