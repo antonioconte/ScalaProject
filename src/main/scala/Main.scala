@@ -25,8 +25,6 @@ object Main {
 
     val sc = new SparkContext(conf)
 
-
-
     // Creazione RDD e partizione in base all'idArticolo
     val dataRDD = load_rdd(path, sc)
 

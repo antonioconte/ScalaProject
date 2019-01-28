@@ -38,9 +38,9 @@ object Util {
     ).collect()
   }
   def linkedListToJson[T](lista: RDD[(String,(Iterable[User],Float,String))]) = {
-    println("-------------JSON FILE-----------------------------")
+//    println("-------------JSON FILE-----------------------------")
     var list = lista.collect()
-    list.foreach(println)
+//    list.foreach(println)
     var jsonList = list.flatMap(u => {
       var idSource = u._1
       var targetList = u._2._1.filter(user => !(user.idUser).eq(u._1))
@@ -50,19 +50,47 @@ object Util {
     val pw = new PrintWriter(new File("../GUI/public/links.json" ))
     pw.write(jsonString)
     pw.close()
-    println("-------------END JSON FILE-----------------------------")
+//    println("-------------END JSON FILE-----------------------------")
   }
+
+  def initialRankToJson(partitionedRDD: RDD[(String,Iterable[User])]) = {
+    println("> STAMPA INIT IN node.json")
+    var ranksToJson = partitionedRDD.flatMap{case(idArt,users) => users.map( user => user.idUser->user.helpfulness) }.groupByKey()
+    var result = ranksToJson.map{case (idUser,listHelpful) => {
+      var size = listHelpful.size
+      var sumHelpful = listHelpful.foldLeft(0f){
+        case (acc,value) => acc+value
+      }
+      (idUser, sumHelpful/size )
+    }}
+    var arrList = result.collect()
+    var jsonList = arrList.map(u => userJson(u._1.replace("\"",""),u._2))
+    val jsonString = write(jsonList)(DefaultFormats)
+    val pw = new PrintWriter(new File("../GUI/public/nodes.json" ))
+    pw.write(jsonString)
+    pw.close()
+    // Rank iniziale per ogni nodo: Calcolata prima dell'inizio delle iterazioni
+
+  }
+
+
 
 
   def running[T](pRDD: RDD[(String,Iterable[User])], LAMBDA: Int, ITER: Int, debug: Boolean,viewGraph:Boolean):Unit = {
     var partitionedRDD = pRDD
 
     var firstTime = true
-    println("------ PRIMA DELLE ITERAZIONI -----")
-    partitionedRDD.flatMap{case(idArt,users) => users.map( user => user.idUser->user.helpfulness) }.groupByKey().collect().foreach(println)
+    if(debug){
+      println("------ PRIMA DELLE ITERAZIONI -----")
+      partitionedRDD.flatMap{case(idArt,users) => users.map( user => user.idUser->user.helpfulness) }.groupByKey().collect().foreach(println)
+    }
+
+    initialRankToJson(partitionedRDD)
+
 
     // INIZIO ITER
     for ( i <- 1 to ITER){
+      Thread.sleep(5000)
       println(s"> INIZIO ITERAZIONE NUMERO -> ${i}")
       if(viewGraph)printPartizione(partitionedRDD)
 
@@ -181,16 +209,12 @@ object Util {
 
       getResult(partitionedRDD, debug)
 
-//      Thread.sleep(10000)
     }
 
     /* groupByKey su RDD contenente quest'ultima struttura
-    * in base ad una qualche formula di riduzione (media o poi si vede) */
-    //creazione struttura idUser -> helpfulness in modo da effettuare successivamente una groupByKey e sommare
-    //i risultati interemedi calcolati nei vari nodi relativi allo stesso utente
-//    getResult(partitionedRDD, debug)
-
-
+    in base ad una qualche formula di riduzione (media o poi si vede)
+    creazione struttura idUser -> helpfulness in modo da effettuare successivamente una groupByKey e sommare
+    i risultati interemedi calcolati nei vari nodi relativi allo stesso utente */
 
     /*
     * >>> MAPPARTITIONS ->
@@ -208,7 +232,6 @@ object Util {
   //last = false allora prendo il risultato intermedio
   def getResult(partitionedRDD: RDD[(String,Iterable[User])], debug: Boolean) = {
     var ranks = partitionedRDD.flatMap{case(idArt,users) => users.map( user => user.idUser->user.helpfulness) }.groupByKey()
-
     if(debug){
       println("------ALLA FINE DELLE ITER---------")
       ranks.collect().foreach(println) //prima della somma
@@ -221,17 +244,12 @@ object Util {
       }
       (idUser, sumHelpful/size )
     }}
-
-    //// Json
     var arrList = result.collect()
     var jsonList = arrList.map(u => userJson(u._1.replace("\"",""),u._2))
-    jsonList.foreach(println)
     val jsonString = write(jsonList)(DefaultFormats)
     val pw = new PrintWriter(new File("../GUI/public/nodes.json" ))
     pw.write(jsonString)
     pw.close()
-    println(jsonString)
-    //// endJson
-//    result.collect().foreach(println)
+    //    result.collect().foreach(println)
   }
 }
