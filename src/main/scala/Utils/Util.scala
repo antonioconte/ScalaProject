@@ -90,7 +90,7 @@ object Util {
 
     // INIZIO ITER
     for ( i <- 1 to ITER){
-      Thread.sleep(5000)
+//      Thread.sleep(5000)
       println(s"> INIZIO ITERAZIONE NUMERO -> ${i}")
       if(viewGraph)printPartizione(partitionedRDD)
 
@@ -103,7 +103,7 @@ object Util {
       * sarà pari a 0. Serve come supporto per le fasi successive
       */
       var orderLinks = partitionedRDD.flatMap{case (key,users) => users.map(p => (p, users.filter(
-        refUser => (p.helpfulness > refUser.helpfulness  || p.idUser.eq(refUser.idUser) ) && p.rating == refUser.rating ), key
+        refUser => (( p.helpfulness > refUser.helpfulness  || (p.idUser).eq(refUser.idUser) ) && p.rating == refUser.rating) ), key
       ))}
       if(debug) println("-------COLLEGAMENTI IN BASE AL VOTO E ALLA HELPFUL-------------")
       if(debug) printPartizione(orderLinks) //in Util.scala

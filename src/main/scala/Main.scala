@@ -13,7 +13,7 @@ object Main {
     disableWarning()
     val localhost = false
     val viewGraph = false //per visualizzare lo stato del grafo all'inizio di ogni iterazione
-    val debug = false //ogni printPartizione causa una collect e perciò un job
+    val debug = true //ogni printPartizione causa una collect e perciò un job
     val LAMBDA = 20
     val ITER = 10
     val NUM_PARTITIONS = 4
