@@ -17,6 +17,10 @@ object Main {
     val ITER = 0
     val NUM_PARTITIONS = 4
     val path = "cd_amazon1k.csv" //minidataset composto da una dozzina di utenti
+    val path = "3prof10users24review.csv"
+    val path = "cd_amazon.csv"
+    val path = "test.csv"
+
 
     val conf = new SparkConf()
       .setAppName("HelpfulnessRank")
