@@ -9,13 +9,16 @@ import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
+/*CLASSI AUSILIARIE PER LA CREAZIONE DEL JSON*/
 case class userJson(id: String, rank: Float)
-
 case class linkJson(source: String, target: String)
-
 object Util {
-  def localHelpfulnessInit(top: Float, all: Float) = (top - (all - top)) / all
 
+  var pathNodes = "../GUI/public/nodes.json"
+  var pathLinks = "../GUI/public/links.json"
+
+  def localHelpfulnessInit(top: Float, all: Float) = (top - (all - top)) / all
+  /*Utlizzate in computeProd per caricare il csv*/
   def load_rdd(path: String, sc: SparkContext): RDD[(String, Iterable[User])] = {
     sc.textFile(path).mapPartitionsWithIndex {
       (idx, iter) => if (idx == 0) iter.drop(1) else iter
@@ -24,43 +27,33 @@ object Util {
       var top = fields(2).substring(2).toFloat
       var all = fields(3).dropRight(2).substring(1).toFloat
       val initHelpfulness = if (all == 0) 0 else localHelpfulnessInit(top, all)
-      //idArt -> (idUser,Rating,Helpfulness)
       (fields(1), User(fields(5), fields(4).toInt, initHelpfulness))
     }).groupByKey()
   }
-
-
-  def disableWarning(): Unit = {
-    Logger.getLogger("org").setLevel(Level.OFF)
-  }
-
+  def disableWarning(): Unit = Logger.getLogger("org").setLevel(Level.OFF)
   def printPartizione[T](value: RDD[T]): Unit = {
-    //mapPartions deve tornare un iterator
+    /*STAMPA IL CONTENUTO DI OGNI PARTIZIONE*/
     value.mapPartitionsWithIndex(
       (index, it) => it.toList.map(println(s"PARTIZIONE:${index}", _)).iterator
     ).collect()
   }
-
   def linkedListToJson[T](lista: RDD[(String, (Iterable[User], Float, String))]) = {
-    //    println("-------------JSON FILE-----------------------------")
+    /*Utilizzata per l'aggiornamento per la view del grafo*/
     var list = lista.collect()
-    //    list.foreach(println)
     var jsonList = list.flatMap(u => {
       var idSource = u._1
       var targetList = u._2._1.filter(user => !(user.idUser).eq(u._1))
       targetList.map(u => linkJson(idSource.replace("\"", ""), u.idUser.replace("\"", "")))
     })
     val jsonString = write(jsonList.distinct)(DefaultFormats)
-    val pw = new PrintWriter(new File("../GUI/public/links.json"))
+    val pw = new PrintWriter(new File(pathLinks))
     pw.write(jsonString)
     pw.close()
-    //    println("-------------END JSON FILE-----------------------------")
   }
-
-  def initialRankToJson(partitionedRDD: RDD[(String, Iterable[User])]) = {
-    println("> STAMPA INIT IN node.json")
-    var ranksToJson = partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey()
-    var result = ranksToJson.map { case (idUser, listHelpful) => {
+  def getResult(partitionedRDD: RDD[(String, Iterable[User])]) = {
+    /* Stampa in nodes.json il rank relativo ad ogni user */
+    var ranks = partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey()
+    var result = ranks.map { case (idUser, listHelpful) => {
       var size = listHelpful.size
       var sumHelpful = listHelpful.foldLeft(0f) {
         case (acc, value) => acc + value
@@ -68,34 +61,41 @@ object Util {
       (idUser, sumHelpful / size)
     }
     }
-    var arrList = result.collect()
-    var jsonList = arrList.map(u => userJson(u._1.replace("\"", ""), u._2))
+    var jsonList = result.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
     val jsonString = write(jsonList)(DefaultFormats)
-    val pw = new PrintWriter(new File("../GUI/public/nodes.json"))
+    val pw = new PrintWriter(new File(pathNodes))
     pw.write(jsonString)
     pw.close()
-    // Rank iniziale per ogni nodo: Calcolata prima dell'inizio delle iterazioni
-
   }
 
-
-  def running[T](pRDD: RDD[(String, Iterable[User])], LAMBDA: Int, ITER: Int, debug: Boolean, viewGraph: Boolean): Unit = {
+  def startComputeProd(path: String, sc: SparkContext,LAMBDA: Int,ITER: Int, DEMO: Boolean, DEBUG: Boolean, NUM_PARTITIONS: Int) = {
+    // Creazione RDD e partizione in base all'idArticolo
+    val dataRDD = load_rdd(path, sc)
+    /*
+    * TODO: Raffinare il partizionamento in modo da avere un bilanciamento dei dati
+    * CustomPartioner è una classe creata ad hoc per tale scopo
+    * codice in classes.CustomerPartitioner
+    * debug = true -> stampa la locazione dei dati in base all'id dell'articolo
+    * */
+    var partitionedRDD = dataRDD.partitionBy(new CustomPartitioner(NUM_PARTITIONS,true)).persist()
+    computeProd(partitionedRDD,LAMBDA,ITER,DEBUG,DEMO)
+  }
+  def computeProd[T](pRDD: RDD[(String, Iterable[User])], LAMBDA: Int, ITER: Int, debug: Boolean, demo: Boolean): Unit = {
     var partitionedRDD = pRDD
 
-    var firstTime = true
     if (debug) {
       println("------ PRIMA DELLE ITERAZIONI -----")
       partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey().collect().foreach(println)
     }
-
-    initialRankToJson(partitionedRDD)
+    /* Prima dell'inizio delle iterazioni vengono stampati i rank per calcolati in base alla media */
+    getResult(partitionedRDD)
 
 
     // INIZIO ITER
     for (i <- 1 to ITER) {
-      //      Thread.sleep(5000)
+      if (demo) Thread.sleep(5000)
       println(s"> INIZIO ITERAZIONE NUMERO -> ${i}")
-      if (viewGraph) printPartizione(partitionedRDD)
+
 
       /* Struttura intermedia fatta in tal modo :
       *  (UtenteDonatore X, UtentiRiceventi,idArticolo)
@@ -121,10 +121,7 @@ object Util {
           pair._3
         )
       )
-      //      if(firstTime){
       linkedListToJson(listaAdiacenza)
-      //        firstTime = false
-      //      }
       if (debug) println("-------LISTA DI ADIACENZA-------------")
       if (debug) printPartizione(listaAdiacenza) //in Util.scala
 
@@ -212,7 +209,7 @@ object Util {
           )
       }, preservesPartitioning = true)
 
-      getResult(partitionedRDD, debug)
+      getResult(partitionedRDD) //ad ogni fine iterazioni viene aggiornato il file nodes.json
 
     }
 
@@ -231,32 +228,6 @@ object Util {
     * */
     if (debug) println("---------------------")
 
-  }
-
-
-  //last = false allora prendo il risultato intermedio
-  def getResult(partitionedRDD: RDD[(String, Iterable[User])], debug: Boolean) = {
-    var ranks = partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey()
-    if (debug) {
-      println("------ALLA FINE DELLE ITER---------")
-      ranks.collect().foreach(println) //prima della somma
-    }
-    println("------RESULT---------")
-    var result = ranks.map { case (idUser, listHelpful) => {
-      var size = listHelpful.size
-      var sumHelpful = listHelpful.foldLeft(0f) {
-        case (acc, value) => acc + value
-      }
-      (idUser, sumHelpful / size)
-    }
-    }
-    var arrList = result.collect()
-    var jsonList = arrList.map(u => userJson(u._1.replace("\"", ""), u._2))
-    val jsonString = write(jsonList)(DefaultFormats)
-    val pw = new PrintWriter(new File("../GUI/public/nodes.json"))
-    pw.write(jsonString)
-    pw.close()
-    //    result.collect().foreach(println)
   }
 
   /* ALL IN ONE */
@@ -280,12 +251,8 @@ object Util {
     }).groupByKey()
   }
 
-  def runAllInOneAlgorithm[T](path: String, sc: SparkContext, LAMBDA: Int, ITER: Int, debug: Boolean, NUM_PARTITIONS: Int): Unit = {
-
-
-    /*
-    Fase 0 Partizione per idUtente
-    */
+  def startComputeGeneral[T](path: String, sc: SparkContext, LAMBDA: Int, ITER: Int, debug: Boolean, NUM_PARTITIONS: Int): Unit = {
+    /* Fase 0 Partizione per idUtente */
     if (debug) println("Fase 0: Partizione per idUtente")
 
     val commentsForUsers = load_rdd_commFORusr(path, sc)
@@ -394,7 +361,8 @@ object Util {
     */
     if (debug) println("Fase 5")
 
-    for (i <- 0 until 10) {
+    for (i <- 1 to ITER) {
+      println(s"> Iterazione ${i}")
       val contributions = links.join(ranks).flatMap {
         case (u, (uLinks, urank)) =>
           uLinks.map(t => (t.toString, if (uLinks.size == 1 || t.toString.equals(u.toString)) 0f else Math.abs(urank) / ((uLinks.size - 1) * LAMBDA)))
@@ -404,6 +372,9 @@ object Util {
     }
 
     if (debug) printPartizione(ranks)
+    println("----- RESULT -----")
+    // !!! non ci sono alcuni user
+    ranks.collect().foreach(println(">",_))
 
 
   }
