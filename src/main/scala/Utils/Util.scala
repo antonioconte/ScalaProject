@@ -38,17 +38,19 @@ object Util {
     ).collect()
   }
   def linkedListToJson[T](lista: RDD[(String,(Iterable[User],Float,String))]) = {
+    println("-------------JSON FILE-----------------------------")
     var list = lista.collect()
+    list.foreach(println)
     var jsonList = list.flatMap(u => {
       var idSource = u._1
       var targetList = u._2._1.filter(user => !(user.idUser).eq(u._1))
       targetList.map( u => linkJson(idSource.replace("\"",""), u.idUser.replace("\"","")))
     })
-    jsonList.foreach(println)
-    val jsonString = write(jsonList)(DefaultFormats)
+    val jsonString = write(jsonList.distinct)(DefaultFormats)
     val pw = new PrintWriter(new File("../GUI/public/links.json" ))
     pw.write(jsonString)
     pw.close()
+    println("-------------END JSON FILE-----------------------------")
   }
 
 
@@ -179,7 +181,7 @@ object Util {
 
       getResult(partitionedRDD, debug)
 
-      Thread.sleep(10000)
+//      Thread.sleep(10000)
     }
 
     /* groupByKey su RDD contenente quest'ultima struttura
