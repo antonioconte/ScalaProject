@@ -117,10 +117,10 @@ object Util {
           pair._3
         )
       )
-      if(firstTime){
+//      if(firstTime){
         linkedListToJson(listaAdiacenza)
-        firstTime = false
-      }
+//        firstTime = false
+//      }
       if(debug) println("-------LISTA DI ADIACENZA-------------")
       if(debug) printPartizione(listaAdiacenza) //in Util.scala
 

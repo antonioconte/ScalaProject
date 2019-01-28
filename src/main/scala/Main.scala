@@ -15,7 +15,7 @@ object Main {
     val viewGraph = false //per visualizzare lo stato del grafo all'inizio di ogni iterazione
     val debug = true //ogni printPartizione causa una collect e perciò un job
     val LAMBDA = 20
-    val ITER = 10
+    val ITER = 0
     val NUM_PARTITIONS = 4
     val path = "cd_amazon1k.csv" //minidataset composto da una dozzina di utenti
 
