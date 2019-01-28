@@ -262,6 +262,7 @@ object Util {
     def partitionSize = Array.fill(NUM_PARTITIONS)(0)
 
     var rddCommForUsr = commentsForUsers.partitionBy(new CustomizedPartitioner(NUM_PARTITIONS, debug, copia, partitionSize)).persist()
+//    var rddCommForUsr = commentsForUsers.partitionBy(new CustomPartitioner(NUM_PARTITIONS,false)).persist()
 
     if (debug) printPartizione(rddCommForUsr)
     if (debug) println()
@@ -334,15 +335,10 @@ object Util {
     if (debug) println("Fase 4: ")
 
     val links1 = rddLocalLinkAndHelp.map {
-      case (usrHelp, list) => {
-        usrHelp._1 -> list.flatMap(_._2)
-      }
+      case (usrHelp, list) => usrHelp._1 -> list.flatMap(_._2)
     }.persist()
-
     val links2 = links1.map(p => p._1 -> p._1)
-
     val links = links1.join(links2).mapValues(p => (p._2 ++ p._1).toList)
-
     var ranks = rddLocalLinkAndHelp.map {
       case (usrHelp, list) => {
         usrHelp._1 -> usrHelp._2
