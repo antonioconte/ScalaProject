@@ -11,8 +11,6 @@ class CustomizedPartitioner(override val numPartitions: Int, val debug: Boolean,
 
     val numComm = rdd.get(key.toString).get.toList.length
     println(key , numComm)
-
-
     var min = partitionSize(0)
     var indMin = 0
     println(indMin, partitionSize(0))
@@ -29,10 +27,8 @@ class CustomizedPartitioner(override val numPartitions: Int, val debug: Boolean,
 
     println(indMin, min)
 
-    println()
-    println()
-    //    println(min)
-    //    println(indMin)
+    println(min)
+    println(indMin)
 
 
     partitionSize(indMin) = partitionSize(indMin) + numComm
