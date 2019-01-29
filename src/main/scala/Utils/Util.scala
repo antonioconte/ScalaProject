@@ -364,14 +364,11 @@ object Util {
           uLinks.map(t => (t.toString, if (uLinks.size == 1 || t.toString.equals(u.toString)) 0f else Math.abs(urank) / ((uLinks.size - 1) * LAMBDA)))
       }
       var addition = contributions.reduceByKey((x, y) => x + y)
-      ranks = ranks.join(addition).mapValues(valore => if ((valore._1 + valore._2) > 1f) 1f else valore._1 + valore._2) //.collect().foreach(println)
+      ranks = ranks.leftOuterJoin(addition).mapValues(valore => if ((valore._1 + valore._2.getOrElse(0f)) > 1f) 1f else valore._1 + valore._2.getOrElse(0f)) //.collect().foreach(println)
     }
 
     if (debug) printPartizione(ranks)
     println("----- RESULT -----")
-    // !!! non ci sono alcuni user
     ranks.collect().foreach(println(">",_))
-
-
   }
 }
