@@ -12,9 +12,7 @@ class CustomizedPartitioner(override val numPartitions: Int, val debug: Boolean,
     println(key , numComm)
     var min = partitionSize(0)
     var indMin = 0
-    println(indMin, partitionSize(0))
-
-
+//    println(indMin, partitionSize(0))
     for(i <- 0 until numPartitions){
       println(i, partitionSize(i))
       if (partitionSize(i)<min){
@@ -23,9 +21,9 @@ class CustomizedPartitioner(override val numPartitions: Int, val debug: Boolean,
       }
     }
 
-    println(indMin, min)
+//    println(indMin, min)
     partitionSize(indMin) = partitionSize(indMin) + numComm
-        print(partitionSize(indMin))
+//        print(partitionSize(indMin))
 
     return indMin
 

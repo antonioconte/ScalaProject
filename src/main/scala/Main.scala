@@ -11,7 +11,7 @@ object Main {
     disableWarning()
     val localhost = false
     val DEBUG = false //ogni printPartizione causa una collect e perciò un job
-    val DEMO = false //per visualizzare lo stato del grafo all'inizio di ogni iterazione
+    val DEMO = false // per la stampa su file .json
     val LAMBDA = 20
     val ITER = 10
     val NUM_PARTITIONS = 4
