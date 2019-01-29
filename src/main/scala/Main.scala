@@ -11,7 +11,7 @@ object Main {
     disableWarning()
     val localhost = false
     val DEBUG = false //ogni printPartizione causa una collect e perciò un job
-    val DEMO = false // per la stampa su file .json
+    val DEMO = true // per la stampa su file .json
     val LAMBDA = 20
     val ITER = 10
     val NUM_PARTITIONS = 4
@@ -33,12 +33,13 @@ object Main {
     typeComputation match {
       case "General" => {
         println("------ Computazione Generale -----")
-        startComputeGeneral(path, sc, LAMBDA, ITER,DEBUG,NUM_PARTITIONS)
+        startComputeGeneral(path, sc, LAMBDA,DEMO,ITER,DEBUG,NUM_PARTITIONS)
       }
       case "Product" => {
         println("------ Computazione Per Prodotto -----")
         startComputeProd(path,sc,LAMBDA,ITER,DEMO,DEBUG,NUM_PARTITIONS)
       }
+      case _ : String => {}
     }
 
 
