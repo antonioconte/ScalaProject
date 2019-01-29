@@ -103,10 +103,12 @@ object Util {
     * codice in classes.CustomerPartitioner
     * DEBUG = true -> stampa la locazione dei dati in base all'id dell'articolo
     * */
-    var partitionedRDD = dataRDD.partitionBy(new CustomPartitioner(NUM_PARTITIONS,true)).persist()
+    val mapProdElem = dataRDD.map( elem => (elem._1,elem._2.toList.length)).collectAsMap()
+    var partitioner = new CustomPartitioner(NUM_PARTITIONS,true, mapProdElem)
+    var partitionedRDD = dataRDD.partitionBy(partitioner).persist()
     computeProd(partitionedRDD,LAMBDA,ITER,DEBUG,DEMO)
   }
-  def computeProd[T](pRDD: RDD[(String, Iterable[User])], LAMBDA: Int, ITER: Int, DEBUG: Boolean, demo: Boolean): Unit = {
+  def computeProd(pRDD: RDD[(String, Iterable[User])], LAMBDA: Int, ITER: Int, DEBUG: Boolean, demo: Boolean): Unit = {
     var partitionedRDD = pRDD
 
     if (DEBUG) {
@@ -280,10 +282,6 @@ object Util {
   def startComputeGeneral[T](path: String, sc: SparkContext, LAMBDA: Int, DEMO:Boolean, ITER: Int, DEBUG: Boolean, NUM_PARTITIONS: Int): Unit = {
     println("------- Caricamento csv in RDD -------")
     val commentsForUsers = load_rdd_commFORusr(path, sc)
-
-//    val copia = commentsForUsers.collectAsMap()
-//    def partitionSize = Array.fill(NUM_PARTITIONS)(0)
-//    var rddCommForUsr = commentsForUsers.partitionBy(new CustomPartitioner(NUM_PARTITIONS,false)).persist()
 
     /* Fase 0 Partizione per idUtente */
     if(DEBUG) println("------ Fase 0: Partizione per idUtente ------")
