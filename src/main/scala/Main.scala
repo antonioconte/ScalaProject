@@ -15,8 +15,8 @@ object Main {
     val LAMBDA = 20
     val ITER = 10
     val NUM_PARTITIONS = 4
-//    val path = "test.csv" //minidataset composto da una dozzina di utenti
-    val path = "3prod10users24review.csv"
+    val path = "demo.csv" //minidataset composto da una dozzina di utenti
+//    val path = "3prod10users24review.csv"
 //    val path = "cd_amazon.csv"
 //    val path = "test.csv"
 
