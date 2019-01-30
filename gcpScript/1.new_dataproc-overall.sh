@@ -9,22 +9,32 @@
 
 
 esc=false
+firstTimeCreated=true
+firstTimeDeleted=true
 
 while ! $esc 
 do
 	echo "Press"
-	echo "[1] to create cluster"
-	echo "[2] to upload file"
+	echo "[1] to create bucket and cluster"
+	echo "[2] to upload files"
 	echo "[3] to run a job"
-	echo "[4] to delete cluster"
+	echo "[4] to delete bucket and cluster"
+    echo "any other key to exit"
+
 
 	read var_enter
-	if [ ${var_enter} == "1" ] #create cluster
+	if [ ${var_enter} == "1" ] #create bucket and cluster
 	then
-		./4.new_gcs-make-bucket.sh
-		./2.new_dataproc-create-cluster.sh
+	    if $firstTimeCreated
+	    then
+		    ./4.new_gcs-make-bucket.sh
+		    ./2.new_dataproc-create-cluster.sh
+		    firstTimeCreated=false
+        else
+            echo "già avviati"
+        fi
 	else
-		if [ ${var_enter} == "2" ] #upload file
+		if [ ${var_enter} == "2" ] #upload files
 		then
 			echo "upload"
 			./6.new_deploy-files.sh
@@ -33,10 +43,16 @@ do
 			then
 				echo "run"
 			else
-				if [ ${var_enter} == "4" ] #delete cluster
+				if [ ${var_enter} == "4" ] #delete bucket and cluster
 				then
-					./3.new_dataproc-delete-cluster.sh
-					./5.new_gcs-delete-bucket.sh
+                    if $firstTimeDeleted && ! $firstTimeCreated
+                    then
+                        ./3.new_dataproc-delete-cluster.sh
+					    ./5.new_gcs-delete-bucket.sh
+                        firstTimeDeleted=false
+                    else
+                        echo "non esistenti"
+                    fi
 				else
 					echo "Invalid Input, error, aborting"
 					esc=true
