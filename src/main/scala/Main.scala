@@ -20,7 +20,7 @@ object Main {
 //    val path = "cd_amazon.csv"
 //    val path = "test.csv"
 
-    val typeComputation = "General"
+    val typeComputation = "Product"
 
     val conf = new SparkConf()
       .setAppName("HelpfulnessRank")

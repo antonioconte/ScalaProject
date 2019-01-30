@@ -22,7 +22,7 @@ class CustomPartitioner(override val numPartitions: Int, val debug: Boolean) ext
 //    println(s"> ${key} -> ${numElem} Partizione [${minIndex}]")
 //    return minIndex
 
-        val k = Math.abs(key.hashCode())
+    val k = Math.abs(key.hashCode())
     val part = k%numPartitions
     if (debug) println(s"> ${key} in partizione ${part}")
     return k % numPartitions

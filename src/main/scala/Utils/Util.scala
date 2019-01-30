@@ -55,6 +55,7 @@ object Util {
   }
 
   def linkedListToJson[T](lista: RDD[(String, (Iterable[User], Float, String))]) = {
+    println(s"Stampa links.js -> ${pathLinks}")
     // UTILIZZATA IN PRODUCT MODE
     /*Utilizzata per l'aggiornamento continuo per la view del grafo */
     var list = lista.collect()
@@ -70,7 +71,7 @@ object Util {
   }
 
   def getResult(partitionedRDD: RDD[(String, Iterable[User])]) = {
-    println(s"Stampa links.js -> ${pathLinks}")
+    println(s"Stampa nodes.js -> ${pathNodes}")
 
     /* Stampa in nodes.json il rank relativo ad ogni user */
     var ranks = partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey()
@@ -84,12 +85,23 @@ object Util {
     }
     var jsonList = result.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
     writeRankFile(jsonList)
+  }
 
+  def printResultRank(partitionedRDD: RDD[(String, Iterable[User])]) = {
+
+    var ranks = partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey()
+    var result = ranks.map { case (idUser, listHelpful) => {
+      var size = listHelpful.size
+      var sumHelpful = listHelpful.foldLeft(0f) {
+        case (acc, value) => acc + value
+      }
+      (idUser, sumHelpful / size)
+    }
+    }
+    result.collect().foreach(println("> ", _))
   }
 
   def writeRankFile(jsonList:Array[userJson]) = {
-    println(s"Stampa nodes.js -> ${pathNodes}")
-
     val jsonString = write(jsonList)(DefaultFormats)
     val pw = new PrintWriter(new File(pathNodes))
     pw.write(jsonString)
@@ -105,8 +117,8 @@ object Util {
     * codice in classes.CustomerPartitioner
     * DEBUG = true -> stampa la locazione dei dati in base all'id dell'articolo
     * */
-//    val mapProdElem = dataRDD.map( elem => (elem._1,elem._2.toList.length)).collectAsMap()
-//    var partitioner = new CustomPartitioner(NUM_PARTITIONS,true, mapProdElem)
+    //    val mapProdElem = dataRDD.map( elem => (elem._1,elem._2.toList.length)).collectAsMap()
+    //    var partitioner = new CustomPartitioner(NUM_PARTITIONS,true, mapProdElem)
     var partitioner = new CustomPartitioner(NUM_PARTITIONS,true)
     var partitionedRDD = dataRDD.partitionBy(partitioner).persist()
     computeProd(partitionedRDD,LAMBDA,ITER,DEBUG,DEMO)
@@ -119,12 +131,15 @@ object Util {
       partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey().collect().foreach(println)
     }
     /* Prima dell'inizio delle iterazioni vengono stampati i rank per calcolati in base alla media */
-    getResult(partitionedRDD)
+    if (demo){
+      println("> stampa stato iniziale dei nodi")
+      getResult(partitionedRDD)
+    }
+
 
 
     // INIZIO ITER
     for (i <- 1 to ITER) {
-      if (demo) Thread.sleep(timeout)
 
       println(s"> INIZIO ITERAZIONE NUMERO -> ${i}")
 
@@ -152,8 +167,8 @@ object Util {
           pair._3
         )
       )
-      linkedListToJson(listaAdiacenza)
-
+      if (demo) linkedListToJson(listaAdiacenza)
+      if (demo) Thread.sleep(timeout) //tempo al client di aggiornare la view
       if (DEBUG) println("-------LISTA DI ADIACENZA-------------")
       if (DEBUG) printPartizione(listaAdiacenza) //in Util.scala
 
@@ -241,7 +256,7 @@ object Util {
           )
       }, preservesPartitioning = true)
 
-      getResult(partitionedRDD) //ad ogni fine iterazioni viene aggiornato il file nodes.json
+      if(demo) getResult(partitionedRDD) //ad ogni fine iterazioni viene aggiornato il file nodes.json
 
     }
 
@@ -259,6 +274,13 @@ object Util {
     * }, preservesPartitioning = true)
     * */
     if (DEBUG) println("---------------------")
+    if(!demo) {
+      var result = partitionedRDD.persist()
+      printResultRank(result)
+      //se non è demo stampa su file solo l'ultima iterata ossia quando il ciclo è finito
+      getResult(result)
+
+    }
 
   }
 
@@ -366,21 +388,23 @@ object Util {
       printPartizione(ranks)
       println("------ END Fase 4 ------")
     }
-
-    /*nel caso generale il link non cambia mai
-    * la stampa in links.json viene fatta solo qui */
-    linkedListToJsonGeneral(links)
-
+    if (DEMO) {
+      /*nel caso generale il link non cambia mai
+      * la stampa in links.json viene fatta solo qui */
+      linkedListToJsonGeneral(links)
+    }
 
     /* Fase 5: inizio pageRank */
     if (DEBUG) println("------- Fase 5: Inizio PageRankCustomized -------")
 
     for (i <- 1 to ITER) {
-      /* Ad ogni iterata stampa ranks.json i valori */
-      var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
-      writeRankFile(jsonList)
-      /* end link.json AND ranks.json*/
-      if (DEMO) Thread.sleep(timeout)
+      /* Ad ogni iterata stampa ranks.json i valori  solo demo Mode*/
+      if (DEMO) {
+        var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
+        writeRankFile(jsonList)
+        /* end link.json AND ranks.json*/
+        Thread.sleep(timeout)
+      }
       val contributions = links.join(ranks).flatMap {
         case (u, (uLinks, urank)) =>
           uLinks.map(t =>
@@ -391,18 +415,12 @@ object Util {
       ranks = ranks.leftOuterJoin(addition)
         .mapValues(valore => if ((valore._1 + valore._2.getOrElse(0f)) > 1f) 1f else valore._1 + valore._2.getOrElse(0f))
     }
-        //stampa dell'ultima iter
-     var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
-     writeRankFile(jsonList)
+    //stampa dell'ultima iter che sia demo oppure no va fatta!
+    var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
+    writeRankFile(jsonList)
+    if (DEBUG) printPartizione(ranks)
+    println("----- RESULT (Ranks) -----")
+    ranks.collect().foreach(println(">",_))
 
-
-
-    if (DEBUG){
-      printPartizione(ranks)
-      println("----- RESULT (Ranks) -----")
-      ranks.collect().foreach(println(">",_))
-    } else {
-      ranks.collect().foreach(println(">",_))
-    }
   }
 }
