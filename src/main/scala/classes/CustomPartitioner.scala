@@ -15,17 +15,17 @@ class CustomPartitioner(override val numPartitions: Int, val debug: Boolean) ext
   }
 
   override def getPartition(key: Any): Int = {
-    var numElem = rddMapCount.get(key.toString).get
-    var minIndex = hashMap.zipWithIndex.min._2
-    var minValue = hashMap(minIndex)
-    hashMap(minIndex) = minValue + numElem
-    println(s"> ${key} -> ${numElem} Partizione [${minIndex}]")
-    return minIndex
+//    var numElem = rddMapCount.get(key.toString).get
+//    var minIndex = hashMap.zipWithIndex.min._2
+//    var minValue = hashMap(minIndex)
+//    hashMap(minIndex) = minValue + numElem
+//    println(s"> ${key} -> ${numElem} Partizione [${minIndex}]")
+//    return minIndex
 
-    //    val k = Math.abs(key.hashCode())
-//    val part = k%numPartitions
-//    if (debug) println(s"> ${key} in partizione ${part}")
-//    return k % numPartitions
+        val k = Math.abs(key.hashCode())
+    val part = k%numPartitions
+    if (debug) println(s"> ${key} in partizione ${part}")
+    return k % numPartitions
   }
 
   override def equals(other: scala.Any): Boolean = {

@@ -39,6 +39,8 @@ object Util {
     ).collect()
   }
   def linkedListToJsonGeneral(links: RDD[(String, List[String])]) = {
+    println(s"Stampa links.js -> ${pathLinks}")
+
     // UTILIZZATA IN GENERAL MODE
     var list = links.collect()
     var jsonList = list.flatMap( u => {
@@ -103,8 +105,9 @@ object Util {
     * codice in classes.CustomerPartitioner
     * DEBUG = true -> stampa la locazione dei dati in base all'id dell'articolo
     * */
-    val mapProdElem = dataRDD.map( elem => (elem._1,elem._2.toList.length)).collectAsMap()
-    var partitioner = new CustomPartitioner(NUM_PARTITIONS,true, mapProdElem)
+//    val mapProdElem = dataRDD.map( elem => (elem._1,elem._2.toList.length)).collectAsMap()
+//    var partitioner = new CustomPartitioner(NUM_PARTITIONS,true, mapProdElem)
+    var partitioner = new CustomPartitioner(NUM_PARTITIONS,true)
     var partitionedRDD = dataRDD.partitionBy(partitioner).persist()
     computeProd(partitionedRDD,LAMBDA,ITER,DEBUG,DEMO)
   }
@@ -121,6 +124,8 @@ object Util {
 
     // INIZIO ITER
     for (i <- 1 to ITER) {
+      if (demo) Thread.sleep(timeout)
+
       println(s"> INIZIO ITERAZIONE NUMERO -> ${i}")
 
       /* Struttura intermedia fatta in tal modo :
@@ -148,7 +153,6 @@ object Util {
         )
       )
       linkedListToJson(listaAdiacenza)
-      if (demo) Thread.sleep(timeout)
 
       if (DEBUG) println("-------LISTA DI ADIACENZA-------------")
       if (DEBUG) printPartizione(listaAdiacenza) //in Util.scala
@@ -387,6 +391,9 @@ object Util {
       ranks = ranks.leftOuterJoin(addition)
         .mapValues(valore => if ((valore._1 + valore._2.getOrElse(0f)) > 1f) 1f else valore._1 + valore._2.getOrElse(0f))
     }
+        //stampa dell'ultima iter
+     var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
+     writeRankFile(jsonList)
 
 
 
