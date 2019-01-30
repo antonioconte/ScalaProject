@@ -1,0 +1,8 @@
+GUIDA
+
+### 1 Install G C SDK
+1
+curl https://sdk.cloud.google.com | bash
+
+2
+exec -l $SHELL
