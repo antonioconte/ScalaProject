@@ -1,0 +1,5 @@
+spostare assembly.sbt dentro la cartella project
+
+in sbt shell fare 'assembly'
+
+se si vuole fare la prova sul cloud copiare il jar dentro la cartella gcpScript/files/src
