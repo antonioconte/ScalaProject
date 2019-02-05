@@ -1,26 +1,73 @@
 package Utils
-
 import java.io._
 
-import classes.{CustomPartitioner, User, UserComment}
 import net.liftweb.json.Serialization.write
 import net.liftweb.json._
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
+import org.apache.spark.{Partitioner, SparkContext}
+import scala.collection.Map
 
 /*CLASSI AUSILIARIE PER LA CREAZIONE DEL JSON*/
 case class userJson(id: String, rank: Float)
 case class linkJson(source: String, target: String)
+
+case class User(idUser:String,rating:Int, helpfulness:Float)
+case class UserComment(idProd:String,rating:Int,helpfulness:Float)
+
+class CustomPartitioner(override val numPartitions: Int, val debug: Boolean) extends Partitioner{
+  var hashMap = Array.fill(numPartitions){0}
+  var count = Map()
+  var rddMapCount : Map[String,Int] = null
+
+  def this(numPartitions: Int,debug: Boolean,rdd: Map[String, Int]) = {
+    this(numPartitions,debug)
+    rddMapCount = rdd
+  }
+
+  override def getPartition(key: Any): Int = {
+    //    var numElem = rddMapCount.get(key.toString).get
+    //    var minIndex = hashMap.zipWithIndex.min._2
+    //    var minValue = hashMap(minIndex)
+    //    hashMap(minIndex) = minValue + numElem
+    //    println(s"> ${key} -> ${numElem} Partizione [${minIndex}]")
+    //    return minIndex
+
+    val k = Math.abs(key.hashCode())
+    val part = k%numPartitions
+    if (debug) println(s"> ${key} in partizione ${part}")
+    return k % numPartitions
+  }
+
+  override def equals(other: scala.Any): Boolean = {
+    other match {
+      case obj : CustomPartitioner => obj.numPartitions == numPartitions
+      case _  => false
+    }
+  }
+
+  def getHashMap(): Unit ={
+    hashMap.indices.foreach(i => println(s"> Part: ${i} -> ${hashMap(i)}"))
+  }
+}
+
 object Util {
 
-  var pathNodes = "../GUI/public/nodes.json"
-  var pathLinks = "../GUI/public/links.json"
-  var timeout = 5000
+  var pathOutput = ""
+  //  var pathLinks = ""
+
+  var timeout = 0
+  def setPath(path : String, t: Int) ={
+    pathOutput = path//+"nodes.json"
+    //    pathLinks = path//+"links.json"
+    timeout = t
+  }
 
   def localHelpfulnessInit(top: Float, all: Float) = (top - (all - top)) / all
-  /*Utlizzate in computeProd per caricare il csv*/
+
   def load_rdd(path: String, sc: SparkContext): RDD[(String, Iterable[User])] = {
+    /*Utlizzate in computeProd per caricare il csv*/
+
     sc.textFile(path).mapPartitionsWithIndex {
       (idx, iter) => if (idx == 0) iter.drop(1) else iter
     }.map(r => {
@@ -31,15 +78,18 @@ object Util {
       (fields(1), User(fields(5), fields(4).toInt, initHelpfulness))
     }).groupByKey()
   }
+
   def disableWarning(): Unit = Logger.getLogger("org").setLevel(Level.OFF)
+
   def printPartizione[T](value: RDD[T]): Unit = {
     /*STAMPA IL CONTENUTO DI OGNI PARTIZIONE*/
     value.mapPartitionsWithIndex(
       (index, it) => it.toList.map(println(s"PARTIZIONE:${index}", _)).iterator
     ).collect()
   }
-  def linkedListToJsonGeneral(links: RDD[(String, List[String])]) = {
-    println(s"Stampa links.js -> ${pathLinks}")
+
+  def printLinksGeneral(links: RDD[(String, List[String])]):Unit = {
+    println("Stampa links before iteration")
 
     // UTILIZZATA IN GENERAL MODE
     var list = links.collect()
@@ -48,14 +98,15 @@ object Util {
       var targetList = u._2.filter( user => !user.eq(userSource)) //ogni lista ricevete contiente userSource che non deve essere considerato
       targetList.map(u => linkJson(userSource.replace("\"", ""), u.replace("\"", "")))
     })
+
     val jsonString = write(jsonList.distinct)(DefaultFormats)
-    val pw = new PrintWriter(new File(pathLinks))
-    pw.write(jsonString)
-    pw.close()
+
+    println("#linksInitial#"+jsonString)
+
   }
 
-  def linkedListToJson[T](lista: RDD[(String, (Iterable[User], Float, String))]) = {
-    println(s"Stampa links.js -> ${pathLinks}")
+  def printLinksProd[T](lista: RDD[(String, (Iterable[User], Float, String))]): Unit = {
+    println("Stampa links before iteration")
     // UTILIZZATA IN PRODUCT MODE
     /*Utilizzata per l'aggiornamento continuo per la view del grafo */
     var list = lista.collect()
@@ -65,13 +116,16 @@ object Util {
       targetList.map(u => linkJson(idSource.replace("\"", ""), u.idUser.replace("\"", "")))
     })
     val jsonString = write(jsonList.distinct)(DefaultFormats)
-    val pw = new PrintWriter(new File(pathLinks))
-    pw.write(jsonString)
-    pw.close()
+
+    println("#linksInitial#"+jsonString)
   }
 
-  def getResult(partitionedRDD: RDD[(String, Iterable[User])]) = {
-    println(s"Stampa nodes.js -> ${pathNodes}")
+  def getResult(partitionedRDD: RDD[(String, Iterable[User])], iter:Int):Unit = {
+    if(iter==0){
+      println("Stampa initial nodes")
+    }else{
+      println(s"Stampa nodes iter ${iter}")
+    }
 
     /* Stampa in nodes.json il rank relativo ad ogni user */
     var ranks = partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey()
@@ -84,10 +138,10 @@ object Util {
     }
     }
     var jsonList = result.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
-    writeRankFile(jsonList)
+    printNodes(jsonList,iter)
   }
 
-  def printResultRank(partitionedRDD: RDD[(String, Iterable[User])]) = {
+  def printResultRank(partitionedRDD: RDD[(String, Iterable[User])]): Unit = {
 
     var ranks = partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey()
     var result = ranks.map { case (idUser, listHelpful) => {
@@ -101,28 +155,29 @@ object Util {
     result.collect().foreach(println("> ", _))
   }
 
-  def writeRankFile(jsonList:Array[userJson]) = {
+  def printNodes(jsonList:Array[userJson],iter:Int): Unit = {
     val jsonString = write(jsonList)(DefaultFormats)
-    val pw = new PrintWriter(new File(pathNodes))
-    pw.write(jsonString)
-    pw.close()
+    if(iter == 0){
+      println("#nodesInitial#"+jsonString)
+    }else{
+      println("#nodesIter"+iter+"#"+jsonString)
+    }
   }
 
-  def startComputeProd(path: String, sc: SparkContext,LAMBDA: Int,ITER: Int, DEMO: Boolean, DEBUG: Boolean, NUM_PARTITIONS: Int) = {
+  /* PRODUCT */
+
+  def startComputeProd(path: String, sc: SparkContext,LAMBDA: Int,ITER: Int, DEMO: Boolean, DEBUG: Boolean, NUM_PARTITIONS: Int): Unit = {
     // Creazione RDD e partizione in base all'idArticolo
     val dataRDD = load_rdd(path, sc)
-    /*
-    * TODO: Raffinare il partizionamento in modo da avere un bilanciamento dei dati
-    * CustomPartioner è una classe creata ad hoc per tale scopo
-    * codice in classes.CustomerPartitioner
-    * DEBUG = true -> stampa la locazione dei dati in base all'id dell'articolo
-    * */
-    //    val mapProdElem = dataRDD.map( elem => (elem._1,elem._2.toList.length)).collectAsMap()
+    /* DEBUG = true -> stampa la locazione dei dati in base all'id dell'articolo */
+
+    //val mapProdElem = dataRDD.map( elem => (elem._1,elem._2.toList.length)).collectAsMap()
     //    var partitioner = new CustomPartitioner(NUM_PARTITIONS,true, mapProdElem)
     var partitioner = new CustomPartitioner(NUM_PARTITIONS,true)
     var partitionedRDD = dataRDD.partitionBy(partitioner).persist()
     computeProd(partitionedRDD,LAMBDA,ITER,DEBUG,DEMO)
   }
+
   def computeProd(pRDD: RDD[(String, Iterable[User])], LAMBDA: Int, ITER: Int, DEBUG: Boolean, demo: Boolean): Unit = {
     var partitionedRDD = pRDD
 
@@ -132,9 +187,10 @@ object Util {
     }
     /* Prima dell'inizio delle iterazioni vengono stampati i rank per calcolati in base alla media */
     if (demo){
-      println("> stampa stato iniziale dei nodi")
-      getResult(partitionedRDD)
+      //      println("> stampa stato iniziale dei nodi")
+      getResult(partitionedRDD,0)
     }
+
 
 
 
@@ -167,7 +223,7 @@ object Util {
           pair._3
         )
       )
-      if (demo) linkedListToJson(listaAdiacenza)
+      if (demo && i==1) printLinksProd(listaAdiacenza)
       if (demo) Thread.sleep(timeout) //tempo al client di aggiornare la view
       if (DEBUG) println("-------LISTA DI ADIACENZA-------------")
       if (DEBUG) printPartizione(listaAdiacenza) //in Util.scala
@@ -256,7 +312,7 @@ object Util {
           )
       }, preservesPartitioning = true)
 
-      if(demo) getResult(partitionedRDD) //ad ogni fine iterazioni viene aggiornato il file nodes.json
+      if(demo) getResult(partitionedRDD,i) //ad ogni fine iterazioni viene aggiornato il file nodes.json
 
     }
 
@@ -274,23 +330,26 @@ object Util {
     * }, preservesPartitioning = true)
     * */
     if (DEBUG) println("---------------------")
-    if(!demo) {
-      var result = partitionedRDD.persist()
-      printResultRank(result)
-      //se non è demo stampa su file solo l'ultima iterata ossia quando il ciclo è finito
-      getResult(result)
-
+    var ranks = partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey()
+    var result = ranks.map { case (idUser, listHelpful) => {
+      var size = listHelpful.size
+      var sumHelpful = listHelpful.foldLeft(0f) {
+        case (acc, value) => acc + value
+      }
+      (idUser, sumHelpful / size)
     }
+    }
+    result.coalesce(1,shuffle=true).saveAsTextFile(pathOutput)
+
 
   }
 
-  /* ALL IN ONE */
+  /* GENERAL */
 
   def load_rdd_commFORusr(path: String, sc: SparkContext): RDD[(String, Iterable[UserComment])] = {
-    sc.textFile(path).mapPartitionsWithIndex {
-      (idx, iter) => if (idx == 0) iter.drop(1) else iter
-    }.map(r => {
-
+    val header = sc.textFile(path).first()
+    val new_record = sc.textFile(path).filter(row => row!= header)
+    new_record.map(r => {
       val fields = r.split(",")
       var idProd = fields(1)
       var posVal = fields(2).substring(2).toFloat
@@ -298,16 +357,16 @@ object Util {
       val initHelpfulness = if (allVal == 0) 0 else localHelpfulnessInit(posVal, allVal)
       var rating = fields(4).toInt
       var idUser = fields(5)
-
-      //map return
-      (idUser, new UserComment(idProd, rating, initHelpfulness))
-
-    }).groupByKey()
+      (idUser, new UserComment(idProd, rating, initHelpfulness ))
+    }).distinct().groupByKey()
   }
 
   def startComputeGeneral[T](path: String, sc: SparkContext, LAMBDA: Int, DEMO:Boolean, ITER: Int, DEBUG: Boolean, NUM_PARTITIONS: Int): Unit = {
     println("------- Caricamento csv in RDD -------")
+
     val commentsForUsers = load_rdd_commFORusr(path, sc)
+    commentsForUsers.collect()
+
 
     /* Fase 0 Partizione per idUtente */
     if(DEBUG) println("------ Fase 0: Partizione per idUtente ------")
@@ -391,7 +450,10 @@ object Util {
     if (DEMO) {
       /*nel caso generale il link non cambia mai
       * la stampa in links.json viene fatta solo qui */
-      linkedListToJsonGeneral(links)
+      printLinksGeneral(links)
+      var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
+      println("Stampa initial nodes")
+      printNodes(jsonList,0)
     }
 
     /* Fase 5: inizio pageRank */
@@ -399,12 +461,7 @@ object Util {
 
     for (i <- 1 to ITER) {
       /* Ad ogni iterata stampa ranks.json i valori  solo demo Mode*/
-      if (DEMO) {
-        var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
-        writeRankFile(jsonList)
-        /* end link.json AND ranks.json*/
-        Thread.sleep(timeout)
-      }
+
       val contributions = links.join(ranks).flatMap {
         case (u, (uLinks, urank)) =>
           uLinks.map(t =>
@@ -414,13 +471,23 @@ object Util {
       var addition = contributions.reduceByKey((x, y) => x + y)
       ranks = ranks.leftOuterJoin(addition)
         .mapValues(valore => if ((valore._1 + valore._2.getOrElse(0f)) > 1f) 1f else valore._1 + valore._2.getOrElse(0f))
+      if (DEMO) {
+        var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
+        println(s"Stampa nodes iter ${i}")
+        printNodes(jsonList,i)
+        /* end link.json AND ranks.json*/
+        Thread.sleep(timeout)
+      }
     }
     //stampa dell'ultima iter che sia demo oppure no va fatta!
-    var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
-    writeRankFile(jsonList)
-    if (DEBUG) printPartizione(ranks)
-    println("----- RESULT (Ranks) -----")
-    ranks.collect().foreach(println(">",_))
+    //    var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
+    //    println(s"Stampa nodes iter ${11}")
+    //    printNodes(jsonList)
 
+
+    if (DEBUG) printPartizione(ranks)
+    println(s"----- Save RESULT (Ranks) in ${pathOutput} -----")
+    //    ranks.collect().foreach(println(">",_))
+    ranks.coalesce(1,shuffle=true).saveAsTextFile(pathOutput)
   }
 }
