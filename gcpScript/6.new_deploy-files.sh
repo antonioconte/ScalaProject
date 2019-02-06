@@ -6,7 +6,7 @@
 #gsutil cp ${DATA_FILE} gs://${GCS_BUCKET_DATA_FOLDER}/${DATA_FILENAME}
 #gsutil cp -r ${OUTPUT_FOLDER} gs://${GCS_BUCKET_OUTPUT_FOLDER}
 
-gsutil cp -r ${FILE_FOLDER_PATH} gs://${GCS_BUCKET_NAME}
+gsutil -m cp -r ${FILE_FOLDER_PATH} gs://${GCS_BUCKET_NAME}
 
 
 

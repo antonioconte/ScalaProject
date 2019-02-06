@@ -1,11 +1,10 @@
 package Utils
-import java.io._
-
 import net.liftweb.json.Serialization.write
 import net.liftweb.json._
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{Partitioner, SparkContext}
+
 import scala.collection.Map
 
 /*CLASSI AUSILIARIE PER LA CREAZIONE DEL JSON*/
@@ -365,13 +364,13 @@ object Util {
     println("------- Caricamento csv in RDD -------")
 
     val commentsForUsers = load_rdd_commFORusr(path, sc)
-    commentsForUsers.collect()
-
 
     /* Fase 0 Partizione per idUtente */
     if(DEBUG) println("------ Fase 0: Partizione per idUtente ------")
     var rddCommForUsr = commentsForUsers.partitionBy(new CustomPartitioner(NUM_PARTITIONS, DEBUG)).persist()
     if (DEBUG) printPartizione(rddCommForUsr)
+
+    rddCommForUsr.take(1).foreach( p => println("Fine partizione idUtente"))
     /*Fase 1: Calcolo helpful locale (media delle helpfulness di ogni utente)
     * con successivo ragguppamento per idArticolo */
     if (DEBUG) println("------- Fase 1: Calcolo Helpfulness localmente --------")
@@ -388,6 +387,7 @@ object Util {
     }
     if (DEBUG) printPartizione(rddUserForProdNewHelpful)
     /* Fase 2: (join) raggruppamento per idProd */
+    rddUserForProdNewHelpful.take(1).foreach( p => println("Fine Calcolo Helpfulness localmente"))
 
     if (DEBUG) println("------- Fase 2: Raggruppamento per idProd -------")
     var rddUserForProdGroup = rddUserForProdNewHelpful.groupBy(_._1).partitionBy(new CustomPartitioner(NUM_PARTITIONS, DEBUG))
@@ -397,6 +397,7 @@ object Util {
 
     }
 
+    rddUserForProdGroup.take(1).foreach( p => println("Fine Raggruppamento per Prod"))
 
     /* Fase 3: Calcolo link localmente
     * Determinare i nodi donatori e i nodi riceventi inbase allo stesso rating e alle loro helpfulness (chi è maggiore dona) */
@@ -421,6 +422,9 @@ object Util {
       println("----------------------------")
     }
 
+    rddLocalLinkAndHelp.take(1).foreach( p => println("Fine calcolo link localmente"))
+
+
 
     /* Fase 4: (join) raggruppamento per idUtente
     *  creazione link e rank*/
@@ -440,13 +444,10 @@ object Util {
         usrHelp._1 -> usrHelp._2
       }
     }
-    if (DEBUG) {
-      println("------ Link (X,List(....)) ossia X deve dare agli elementi della lista ------")
-      printPartizione(links)
-      println("------ Rank (prima delle partizioni) ------")
-      printPartizione(ranks)
-      println("------ END Fase 4 ------")
-    }
+
+    links.take(1).foreach(p => println(("Fine del calcolo dei links")))
+
+
     if (DEMO) {
       /*nel caso generale il link non cambia mai
       * la stampa in links.json viene fatta solo qui */
@@ -459,6 +460,7 @@ object Util {
     /* Fase 5: inizio pageRank */
     if (DEBUG) println("------- Fase 5: Inizio PageRankCustomized -------")
 
+    links.take(1).foreach(p => println(("Inizio ITERAZIONI")))
     for (i <- 1 to ITER) {
       /* Ad ogni iterata stampa ranks.json i valori  solo demo Mode*/
 
@@ -471,6 +473,7 @@ object Util {
       var addition = contributions.reduceByKey((x, y) => x + y)
       ranks = ranks.leftOuterJoin(addition)
         .mapValues(valore => if ((valore._1 + valore._2.getOrElse(0f)) > 1f) 1f else valore._1 + valore._2.getOrElse(0f))
+      ranks.take(1).foreach( p => println(s">>>>>Iterazione ${i}"))
       if (DEMO) {
         var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
         println(s"Stampa nodes iter ${i}")

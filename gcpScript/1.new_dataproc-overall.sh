@@ -42,7 +42,7 @@ do
 			if [ ${var_enter} == "3" ] #run a job
 			then
 				echo "run"
-				./7.new_dataproc-run-job.sh
+				8.new_dataproc-run-job.sh
 			else
 				if [ ${var_enter} == "4" ] #delete bucket and cluster
 				then
