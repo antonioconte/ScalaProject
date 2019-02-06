@@ -102,8 +102,12 @@ object Util {
     println("#linksInitial#"+jsonString)
   }
 
-  def getResult(partitionedRDD: RDD[(String, Iterable[User])], iter:Int, demo: Boolean,t0: Long ):Unit = {
-
+  def getResult(partitionedRDD: RDD[(String, Iterable[User])], iter:Int):Unit = {
+    if(iter==0){
+      println("Stampa initial nodes")
+    }else{
+      println(s"Stampa nodes iter ${iter}")
+    }
 
     /* Stampa in nodes.json il rank relativo ad ogni user */
     var ranks = partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey()
@@ -115,19 +119,8 @@ object Util {
       (idUser, sumHelpful / size)
     }
     }
-
-    if(iter > 0) result.take(1).foreach(_ => getTime("Iterazione "+ iter,t0))
-
-    if(demo){
-      if(iter==0 ){
-        println("Stampa initial nodes")
-      }else{
-        println(s"Stampa nodes iter ${iter}")
-      }
-      var jsonList = result.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
-      printNodes(jsonList,iter)
-    }
-
+    var jsonList = result.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
+    printNodes(jsonList,iter)
   }
 
   def printResultRank(partitionedRDD: RDD[(String, Iterable[User])]): Unit = {
@@ -162,7 +155,6 @@ object Util {
     val t_preload = System.nanoTime()
     val dataRDD = load_rdd(path, sc)
     var partitionedRDD = dataRDD.partitionBy(new CustomPartitioner(NUM_PARTITIONS,false)).persist()
-    val t_postload_part = System.nanoTime()
     partitionedRDD.take(1).foreach(_ => getTime("load e part: ",t_preload))
     computeProd(partitionedRDD,LAMBDA,ITER,DEMO)
   }
@@ -170,9 +162,9 @@ object Util {
   def computeProd(pRDD: RDD[(String, Iterable[User])], LAMBDA: Int, ITER: Int,demo: Boolean): Unit = {
     var partitionedRDD = pRDD
     var t0 = System.nanoTime()
-    getResult(partitionedRDD,0,demo,t0)
+
+    if (demo) getResult(partitionedRDD,0)
     for (i <- 1 to ITER) { // INIZIO ITER
-      t0 = System.nanoTime()
       /* Struttura intermedia fatta in tal modo :
       *  (UtenteDonatore X, UtentiRiceventi,idArticolo)
       * dove UtentiRiceventi è l'insieme degli utenti con helpfulness minore di X ma che
@@ -258,10 +250,11 @@ object Util {
 
       //stampa nel terminale per il flusso in nodejs solo la prima volta per avere la topologia della rete
       if (demo && i==1) printLinksProd(listaAdiacenza)
+      if(demo){
         //ad ogni fine iterazioni vengono stampati a video i rank
-      getResult(partitionedRDD,i,demo,t0)
-      if(demo) Thread.sleep(timeout) //tempo al client di aggiornare la view
-
+        getResult(partitionedRDD,i)
+        Thread.sleep(timeout) //tempo al client di aggiornare la view
+      }
 
 
     }/*fine ciclo*/
@@ -333,12 +326,12 @@ object Util {
         var globalHelpful = hel / nhelp
         usrCommts.map(comm => (comm.idProd, usr, comm.rating, globalHelpful))
       }
-    }
+    }.persist()
     rddUserForProdNewHelpful.take(1).foreach( _ => getTime("calcolo helpfulness locale (F1)",t0))
 
     /* Fase 2: (join) raggruppamento per idProd */
     t0 = System.nanoTime()
-    var rddUserForProdGroup = rddUserForProdNewHelpful.groupBy(_._1).partitionBy(new CustomPartitioner(NUM_PARTITIONS, false))
+    var rddUserForProdGroup = rddUserForProdNewHelpful.groupBy(_._1).partitionBy(new CustomPartitioner(NUM_PARTITIONS, false)).persist()
     rddUserForProdGroup.take(1).foreach( _ => getTime("raggruppamento per idProd (F2)",t0))
 
     /* Fase 3: Calcolo link localmente
@@ -357,7 +350,7 @@ object Util {
           }
         )
       }
-    }.groupBy(_._1)
+    }.groupBy(_._1).persist()
     rddLocalLinkAndHelp.take(1).foreach( _ => getTime("calcolo link localmente (F3)",t0))
 
 
@@ -371,7 +364,7 @@ object Util {
       case (usrHelp, list) => usrHelp._1 -> list.flatMap(_._2)
     }.persist()
     val links2 = links1.map(p => p._1 -> p._1)
-    val links = links2.join(links1).mapValues(p => List(p._1) ++ p._2 )
+    val links = links2.join(links1).mapValues(p => List(p._1) ++ p._2 ).persist()
 
     var ranks = rddLocalLinkAndHelp.map {
       case (usrHelp, list) => {
