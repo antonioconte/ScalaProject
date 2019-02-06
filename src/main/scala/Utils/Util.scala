@@ -164,7 +164,7 @@ object Util {
     val t_preload = System.nanoTime()
     val dataRDD = load_rdd(path, sc)
     var partitionedRDD = dataRDD.partitionBy(new CustomPartitioner(NUM_PARTITIONS,false)).persist()
-    partitionedRDD.take(1).foreach(_ => getTime("load e part: ",t_preload))
+    partitionedRDD.take(1).foreach(_ => getTime("load e part",t_preload))
     computeProd(partitionedRDD,LAMBDA,ITER,DEMO)
   }
 
@@ -268,19 +268,8 @@ object Util {
 
     }/*fine ciclo*/
 
-    /* groupByKey su RDD contenente quest'ultima struttura
-    in base ad una qualche formula di riduzione (media o poi si vede)
-    creazione struttura idUser -> helpfulness in modo da effettuare successivamente una groupByKey e sommare
-    i risultati interemedi calcolati nei vari nodi relativi allo stesso utente */
-
-    /*
-    * >>> MAPPARTITIONS ->
-    * NOTE: https://stackoverflow.com/questions/41629953/running-groupbykey-reducebukey-on-partitioned-data-but-with-different-key
-    * RDD.mapPartitions({ it =>
-    *       it.toList.groupBy(_._1).mapValues(_.size) // some grouping + reducing the result
-    *       .iterator
-    * }, preservesPartitioning = true)
-    * */
+    /* MAPPARTITIONS NOTE:
+     * https://stackoverflow.com/questions/41629953/running-groupbykey-reducebukey-on-partitioned-data-but-with-different-key*/
     var ranks = partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey()
     var result = ranks.map { case (idUser, listHelpful) => {
       var size = listHelpful.size
@@ -353,17 +342,15 @@ object Util {
             var ratCur = usr._3
             val usrRiceventi = users.filter(otherUsr => otherUsr._4 < helpCurr && otherUsr._3 == ratCur).map(_._2)
             // idUser deve dare un suo contributo che dipende da helpcurr alla lista usrRiceventi
-            ((idUser, helpCurr) -> usrRiceventi)
+            (idUser, helpCurr) -> usrRiceventi
           }
         )
       }
     }.groupBy(_._1).persist()
     rddLocalLinkAndHelp.take(1).foreach( _ => getTime("calcolo link localmente (F3)",t0))
 
-
-    /* Fase 4: (join) raggruppamento per idUtente
-    *  creazione link e rank
-      Fase 4: Raggruppamento idUtente per avere l'insieme totale dei riceventi
+    /* Fase 4: (join) raggruppamento per idUtente e creazione link e rank
+      Raggruppamento idUtente per avere l'insieme totale dei riceventi
       !! Vengono determinati i link e il rank degli utenti in base ai soli commenti
     */
     t0 = System.nanoTime()
@@ -386,8 +373,6 @@ object Util {
     }
 
     if (DEMO) {
-      /*nel caso generale il link non cambia mai
-      * la stampa in links.json viene fatta solo qui */
       printLinksGeneral(links)
       var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
       printNodes(jsonList,0)
@@ -398,19 +383,23 @@ object Util {
       t0 = System.nanoTime()
       val contributions = links.join(ranks).flatMap {
         case (u, (uLinks, urank)) =>
+          /*u deve dare un contributo agli utenti in uLinks */
           uLinks.map(t =>
+            /*per ogni utente in uLinks si calcola quanto deve ricevere da u il cui rank è urank
+            * se uLinks == 1 significa che l'utente non deve dare nulla in quanto l'unico utente in uLinks è lui stesso
+            * altrimenti viene diviso uRank in base al numero di utente riceventi meno l'user donatore */
             (t.toString, if (uLinks.size == 1 || t.toString.equals(u.toString)) 0f else Math.abs(urank) / ((uLinks.size - 1) * LAMBDA))
           )
       }
-
+      /*contributions è una map <K,V> e si vanno a sommare tutti i contributi per ogni utente*/
       var addition = contributions.reduceByKey((x, y) => x + y)
+      /*si aggiornano i rank sommando i contributi*/
       ranks = ranks.leftOuterJoin(addition)
         .mapValues(valore => if ((valore._1 + valore._2.getOrElse(0f)) > 1f) 1f else valore._1 + valore._2.getOrElse(0f))
 
       ranks.take(1).foreach( _ => getTime("iterazione " + i,t0))
 
       if (DEMO) {
-        /* Ad ogni iterata stampa ranks.json i valori  solo demo Mode*/
         var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
         printNodes(jsonList,i)
         Thread.sleep(timeout)
