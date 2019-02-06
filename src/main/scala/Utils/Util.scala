@@ -5,8 +5,6 @@ import org.apache.log4j.{Level, Logger}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{Partitioner, SparkContext}
 
-import scala.collection.Map
-
 /*CLASSI AUSILIARIE PER LA CREAZIONE DEL JSON*/
 case class userJson(id: String, rank: Float)
 case class linkJson(source: String, target: String)
@@ -15,14 +13,6 @@ case class User(idUser:String,rating:Int, helpfulness:Float)
 case class UserComment(idProd:String,rating:Int,helpfulness:Float)
 
 class CustomPartitioner(override val numPartitions: Int, val debug: Boolean) extends Partitioner{
-  var hashMap = Array.fill(numPartitions){0}
-  var count = Map()
-  var rddMapCount : Map[String,Int] = null
-
-  def this(numPartitions: Int,debug: Boolean,rdd: Map[String, Int]) = {
-    this(numPartitions,debug)
-    rddMapCount = rdd
-  }
 
   override def getPartition(key: Any): Int = {
     //    var numElem = rddMapCount.get(key.toString).get
@@ -45,20 +35,15 @@ class CustomPartitioner(override val numPartitions: Int, val debug: Boolean) ext
     }
   }
 
-  def getHashMap(): Unit ={
-    hashMap.indices.foreach(i => println(s"> Part: ${i} -> ${hashMap(i)}"))
-  }
 }
 
 object Util {
 
   var pathOutput = ""
-  //  var pathLinks = ""
 
   var timeout = 0
   def setPath(path : String, t: Int) ={
     pathOutput = path//+"nodes.json"
-    //    pathLinks = path//+"links.json"
     timeout = t
   }
 
@@ -88,8 +73,6 @@ object Util {
   }
 
   def printLinksGeneral(links: RDD[(String, List[String])]):Unit = {
-    println("Stampa links before iteration")
-
     // UTILIZZATA IN GENERAL MODE
     var list = links.collect()
     var jsonList = list.flatMap( u => {
@@ -163,41 +146,26 @@ object Util {
     }
   }
 
+  def getTime(string: String,t0:Long) = println("> Tempo di " + string + ": " + (System.nanoTime()-t0)/1000000000f + "s")
+
   /* PRODUCT */
-
-  def startComputeProd(path: String, sc: SparkContext,LAMBDA: Int,ITER: Int, DEMO: Boolean, DEBUG: Boolean, NUM_PARTITIONS: Int): Unit = {
+  def startComputeProd(path: String, sc: SparkContext,LAMBDA: Int,ITER: Int, DEMO: Boolean, NUM_PARTITIONS: Int): Unit = {
     // Creazione RDD e partizione in base all'idArticolo
-    val dataRDD = load_rdd(path, sc)
-    /* DEBUG = true -> stampa la locazione dei dati in base all'id dell'articolo */
 
-    //val mapProdElem = dataRDD.map( elem => (elem._1,elem._2.toList.length)).collectAsMap()
-    //    var partitioner = new CustomPartitioner(NUM_PARTITIONS,true, mapProdElem)
-    var partitioner = new CustomPartitioner(NUM_PARTITIONS,true)
-    var partitionedRDD = dataRDD.partitionBy(partitioner).persist()
-    computeProd(partitionedRDD,LAMBDA,ITER,DEBUG,DEMO)
+    val t_preload = System.nanoTime()
+    val dataRDD = load_rdd(path, sc)
+    var partitionedRDD = dataRDD.partitionBy(new CustomPartitioner(NUM_PARTITIONS,false)).persist()
+    val t_postload_part = System.nanoTime()
+    partitionedRDD.take(1).foreach(_ => getTime("load e part: ",t_preload))
+    computeProd(partitionedRDD,LAMBDA,ITER,DEMO)
   }
 
-  def computeProd(pRDD: RDD[(String, Iterable[User])], LAMBDA: Int, ITER: Int, DEBUG: Boolean, demo: Boolean): Unit = {
+  def computeProd(pRDD: RDD[(String, Iterable[User])], LAMBDA: Int, ITER: Int,demo: Boolean): Unit = {
     var partitionedRDD = pRDD
+    var t0 = System.nanoTime()
 
-    if (DEBUG) {
-      println("------ PRIMA DELLE ITERAZIONI -----")
-      partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey().collect().foreach(println)
-    }
-    /* Prima dell'inizio delle iterazioni vengono stampati i rank per calcolati in base alla media */
-    if (demo){
-      //      println("> stampa stato iniziale dei nodi")
-      getResult(partitionedRDD,0)
-    }
-
-
-
-
-    // INIZIO ITER
-    for (i <- 1 to ITER) {
-
-      println(s"> INIZIO ITERAZIONE NUMERO -> ${i}")
-
+    if (demo) getResult(partitionedRDD,0)
+    for (i <- 1 to ITER) { // INIZIO ITER
       /* Struttura intermedia fatta in tal modo :
       *  (UtenteDonatore X, UtentiRiceventi,idArticolo)
       * dove UtentiRiceventi è l'insieme degli utenti con helpfulness minore di X ma che
@@ -210,8 +178,7 @@ object Util {
         refUser => ((p.helpfulness > refUser.helpfulness || (p.idUser).eq(refUser.idUser)) && p.rating == refUser.rating)), key
       ))
       }
-      if (DEBUG) println("-------COLLEGAMENTI IN BASE AL VOTO E ALLA HELPFUL-------------")
-      if (DEBUG) printPartizione(orderLinks) //in Util.scala
+      /*-------COLLEGAMENTI IN BASE AL VOTO E ALLA HELPFUL */
       /* ogni utente "donatore" deve conoscere la sua helpfulness e la lista dei destinatari
       (X, (LISTADestinatari, Y, idArticolo) X deve dividere Y con LISTADestinatari relativo all'idArticolo
       tale struttura serve per il calcolo del contributo per ogni utente nella LISTADestinatari */
@@ -222,17 +189,13 @@ object Util {
           pair._3
         )
       )
-      if (demo && i==1) printLinksProd(listaAdiacenza)
-      if (demo) Thread.sleep(timeout) //tempo al client di aggiornare la view
-      if (DEBUG) println("-------LISTA DI ADIACENZA-------------")
-      if (DEBUG) printPartizione(listaAdiacenza) //in Util.scala
+
 
       /* Ora si calcolano le coppie (ricevente, contributo)
       ottenendo per ogni partizione la lista  di tale coppia <chiave,value>
       dove la chiave è il ricevente che deve sommare alla propria helpfulness
       un valore pari a value (contributo_ricevuto)
       * */
-      if (DEBUG) println("----Contributi (y,(value, idArt, helpfull di y)) y deve ricevere un contrib pari a value per aver commentato lo stesso idArt -------------")
       val contribs = listaAdiacenza.flatMap {
         pair => { // per ogni coppia (Donatore,(ListaDest, myHelp)
           val currentId = pair._1
@@ -248,42 +211,17 @@ object Util {
 
         }
       }
-      if (DEBUG) printPartizione(contribs) //in Util.scala
 
       /* (1.) Raggruppamento per articolo Y per ogni partizione in quanto ci possono essere più articoli
       * nella stessa partizione
       *  (2.) Raggruppamento per idUtente e calcolo la somma dei contributi
-      *  per l'utente X relativo all'articolo Y sommando con la helpfulness */
-      if (DEBUG) println("--------SOMMA CONTRIBS E Helpfulness PER USER (stesso articolo)------------")
-      /*
+      *  per l'utente X relativo all'articolo Y sommando con la helpfulness
       * BISOGNA RAGRUPPARE LE CHIAVI UTILIZZANDO LE NARROW TRASFORMATIONS
       * OSSIA QUELLE TRASFORMAZIONI CHE NON CAUSANO SHUFFLING.
       * RAGGRUPPATE LE CHIAVI OSSIA FATTA LA SOMMA TOTALE DEI CONTRIBUTI
       * CHE OGNI NODO DOVRÀ AVERE SI PROCEDE CON L'UPDATE DELLE HELPFULNESS
       * ANDANDO A SOMMARE LA HELPFULNESS DI OGNI NODO CON IL RELATIVO VALORE
       * OTTENUTO DAL RAGGRUPPAMENTO
-      *
-      * > PRIMA:
-      * PART0: (4,0.12)   //user 4 ha ricevuto un contr di 0.12
-      * PART0: (3,0.05)   //ART-1
-      * PART0: (4,0.5)    //ART-1
-      * PART0: (4,0.2)    //ART-2 È DI UN ALTRO ARTICOLO PERCIÒ NON VERRA CONTATO
-      * PART1: (3,0.4)    //ART-3
-      * PART1: (3,0.1)    //ART-3
-      * PART1: (5,0.2)    //ART-3
-      *
-      * > DOPO:
-      * PART0: (4,0.62)   //user 4->contributo totale di 0.62 che andrà sommato alla helpfulness  ART-1
-      * PART0: (3,0.05)   //ART-1
-      * PART0: (4,0.2)    //user 4->contributo totale di 0.62 che andrà sommato alla helpfulness  ART-2
-      * PART1: (3,0.5)    //ART-3
-      * PART1: (5,0.2)    //ART-3
-      * ALLA FINE DELLE ITERAZIONI DOBBIAMO AVERE UNA STRUTTURA DEL GENERE: CALCOLARE LA HELPFULNESS LOCALE
-      * PART0: (4, helpfulness-calcolata-dalle iter)    //ART-1
-      * PART0: (3, helpfulness-calcolata-dalle iter)    //ART-1
-      * PART0: (4, helpfulness-calcolata-dalle iter)    //ART-2
-      * PART0: (3, helpfulness-calcolata-dalle iter)    //ART-3
-      * PART0: (5, helpfulness-calcolata-dalle iter)    //ART-3
       */
       partitionedRDD = contribs.mapPartitions({ it =>
         it.toList.groupBy(_._2._2).iterator
@@ -311,9 +249,16 @@ object Util {
           )
       }, preservesPartitioning = true)
 
-      if(demo) getResult(partitionedRDD,i) //ad ogni fine iterazioni viene aggiornato il file nodes.json
+      //stampa nel terminale per il flusso in nodejs solo la prima volta per avere la topologia della rete
+      if (demo && i==1) printLinksProd(listaAdiacenza)
+      if(demo){
+        //ad ogni fine iterazioni vengono stampati a video i rank
+        getResult(partitionedRDD,i)
+        Thread.sleep(timeout) //tempo al client di aggiornare la view
+      }
 
-    }
+
+    }/*fine ciclo*/
 
     /* groupByKey su RDD contenente quest'ultima struttura
     in base ad una qualche formula di riduzione (media o poi si vede)
@@ -328,16 +273,16 @@ object Util {
     *       .iterator
     * }, preservesPartitioning = true)
     * */
-    if (DEBUG) println("---------------------")
     var ranks = partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey()
     var result = ranks.map { case (idUser, listHelpful) => {
       var size = listHelpful.size
       var sumHelpful = listHelpful.foldLeft(0f) {
         case (acc, value) => acc + value
+        }
+        (idUser, sumHelpful / size)
       }
-      (idUser, sumHelpful / size)
     }
-    }
+    /* stampa del risultato su directory output */
     result.coalesce(1,shuffle=true).saveAsTextFile(pathOutput)
 
 
@@ -360,20 +305,18 @@ object Util {
     }).distinct().groupByKey()
   }
 
-  def startComputeGeneral[T](path: String, sc: SparkContext, LAMBDA: Int, DEMO:Boolean, ITER: Int, DEBUG: Boolean, NUM_PARTITIONS: Int): Unit = {
+  def startComputeGeneral[T](path: String, sc: SparkContext, LAMBDA: Int, DEMO:Boolean, ITER: Int, NUM_PARTITIONS: Int): Unit = {
     println("------- Caricamento csv in RDD -------")
-
+    var t0 = System.nanoTime()
     val commentsForUsers = load_rdd_commFORusr(path, sc)
-
     /* Fase 0 Partizione per idUtente */
-    if(DEBUG) println("------ Fase 0: Partizione per idUtente ------")
-    var rddCommForUsr = commentsForUsers.partitionBy(new CustomPartitioner(NUM_PARTITIONS, DEBUG)).persist()
-    if (DEBUG) printPartizione(rddCommForUsr)
+    var rddCommForUsr = commentsForUsers.partitionBy(new CustomPartitioner(NUM_PARTITIONS, false)).persist()
+    rddCommForUsr.take(1).foreach( _ => getTime("load e part",t0))
 
-    rddCommForUsr.take(1).foreach( p => println("Fine partizione idUtente"))
     /*Fase 1: Calcolo helpful locale (media delle helpfulness di ogni utente)
     * con successivo ragguppamento per idArticolo */
-    if (DEBUG) println("------- Fase 1: Calcolo Helpfulness localmente --------")
+
+    t0 = System.nanoTime()
     val rddUserForProdNewHelpful = rddCommForUsr.flatMap {
       case (usr, usrCommts) => {
         val (hel, nhelp) = usrCommts.foldLeft((0f, 0)) {
@@ -385,23 +328,16 @@ object Util {
         usrCommts.map(comm => (comm.idProd, usr, comm.rating, globalHelpful))
       }
     }
-    if (DEBUG) printPartizione(rddUserForProdNewHelpful)
+    rddUserForProdNewHelpful.take(1).foreach( _ => getTime("calcolo helpfulness locale (F1)",t0))
+
     /* Fase 2: (join) raggruppamento per idProd */
-    rddUserForProdNewHelpful.take(1).foreach( p => println("Fine Calcolo Helpfulness localmente"))
-
-    if (DEBUG) println("------- Fase 2: Raggruppamento per idProd -------")
-    var rddUserForProdGroup = rddUserForProdNewHelpful.groupBy(_._1).partitionBy(new CustomPartitioner(NUM_PARTITIONS, DEBUG))
-    if (DEBUG) {
-      printPartizione(rddUserForProdGroup)
-      println("-------------------------")
-
-    }
-
-    rddUserForProdGroup.take(1).foreach( p => println("Fine Raggruppamento per Prod"))
+    t0 = System.nanoTime()
+    var rddUserForProdGroup = rddUserForProdNewHelpful.groupBy(_._1).partitionBy(new CustomPartitioner(NUM_PARTITIONS, false))
+    rddUserForProdGroup.take(1).foreach( _ => getTime("raggruppamento per idProd (F2)",t0))
 
     /* Fase 3: Calcolo link localmente
-    * Determinare i nodi donatori e i nodi riceventi inbase allo stesso rating e alle loro helpfulness (chi è maggiore dona) */
-    if (DEBUG) println("------- Fase 3: Calcolo link localmente -------")
+    * Determinare i nodi donatori e i nodi riceventi in base allo stesso rating e alle loro helpfulness (chi è maggiore dona) */
+    t0 = System.nanoTime()
     var rddLocalLinkAndHelp = rddUserForProdGroup.flatMap {
       case (key, users) => {
         users.map(
@@ -416,23 +352,15 @@ object Util {
         )
       }
     }.groupBy(_._1)
-
-    if (DEBUG) {
-      printPartizione(rddLocalLinkAndHelp)
-      println("----------------------------")
-    }
-
-    rddLocalLinkAndHelp.take(1).foreach( p => println("Fine calcolo link localmente"))
-
+    rddLocalLinkAndHelp.take(1).foreach( _ => getTime("calcolo link localmente (F3)",t0))
 
 
     /* Fase 4: (join) raggruppamento per idUtente
-    *  creazione link e rank*/
-    if (DEBUG)  {
-      println("------- Fase 4: Raggruppamento idUtente per avere l'insieme totale dei riceventi ----------")
-      println("------- !!! Vengono determinati i link e il rank degli utenti in base ai soli commenti ---------")
-    }
-
+    *  creazione link e rank
+      Fase 4: Raggruppamento idUtente per avere l'insieme totale dei riceventi
+      !! Vengono determinati i link e il rank degli utenti in base ai soli commenti
+    */
+    t0 = System.nanoTime()
     val links1 = rddLocalLinkAndHelp.map {
       case (usrHelp, list) => usrHelp._1 -> list.flatMap(_._2)
     }.persist()
@@ -444,8 +372,7 @@ object Util {
         usrHelp._1 -> usrHelp._2
       }
     }
-
-    links.take(1).foreach(p => println(("Fine del calcolo dei links")))
+    links.take(1).foreach(_ => getTime("calcolo dei links globali (F4)",t0))
 
 
     if (DEMO) {
@@ -458,39 +385,33 @@ object Util {
     }
 
     /* Fase 5: inizio pageRank */
-    if (DEBUG) println("------- Fase 5: Inizio PageRankCustomized -------")
-
-    links.take(1).foreach(p => println(("Inizio ITERAZIONI")))
     for (i <- 1 to ITER) {
+      t0 = System.nanoTime()
       /* Ad ogni iterata stampa ranks.json i valori  solo demo Mode*/
-
       val contributions = links.join(ranks).flatMap {
         case (u, (uLinks, urank)) =>
           uLinks.map(t =>
             (t.toString, if (uLinks.size == 1 || t.toString.equals(u.toString)) 0f else Math.abs(urank) / ((uLinks.size - 1) * LAMBDA))
           )
       }
+
       var addition = contributions.reduceByKey((x, y) => x + y)
       ranks = ranks.leftOuterJoin(addition)
         .mapValues(valore => if ((valore._1 + valore._2.getOrElse(0f)) > 1f) 1f else valore._1 + valore._2.getOrElse(0f))
-      ranks.take(1).foreach( p => println(s">>>>>Iterazione ${i}"))
+
+      ranks.take(1).foreach( _ => getTime("iterazione " + i,t0))
+
       if (DEMO) {
         var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
         println(s"Stampa nodes iter ${i}")
         printNodes(jsonList,i)
-        /* end link.json AND ranks.json*/
         Thread.sleep(timeout)
       }
     }
-    //stampa dell'ultima iter che sia demo oppure no va fatta!
-    //    var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
-    //    println(s"Stampa nodes iter ${11}")
-    //    printNodes(jsonList)
 
-
-    if (DEBUG) printPartizione(ranks)
     println(s"----- Save RESULT (Ranks) in ${pathOutput} -----")
-    //    ranks.collect().foreach(println(">",_))
+    t0 = System.nanoTime()
     ranks.coalesce(1,shuffle=true).saveAsTextFile(pathOutput)
+    getTime("Scrittura in file", t0)
   }
 }
