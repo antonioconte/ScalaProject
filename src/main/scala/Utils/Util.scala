@@ -1,4 +1,7 @@
 package Utils
+import java.text.SimpleDateFormat
+import java.util.Date
+
 import net.liftweb.json.Serialization.write
 import net.liftweb.json._
 import org.apache.log4j.{Level, Logger}
@@ -43,7 +46,7 @@ object Util {
 
   var timeout = 0
   def setPath(path : String, t: Int) ={
-    pathOutput = path//+"nodes.json"
+    pathOutput = path
     timeout = t
   }
 
@@ -124,7 +127,6 @@ object Util {
   }
 
   def printResultRank(partitionedRDD: RDD[(String, Iterable[User])]): Unit = {
-
     var ranks = partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey()
     var result = ranks.map { case (idUser, listHelpful) => {
       var size = listHelpful.size
@@ -146,7 +148,14 @@ object Util {
     }
   }
 
-  def getTime(string: String,t0:Long) = println("> Tempo di " + string + ": " + (System.nanoTime()-t0)/1000000000f + "s")
+  def getTime(string: String,t0:Long) = {
+
+    var yourmilliseconds = System.currentTimeMillis();
+    var sdf = new SimpleDateFormat("HH:mm:ss");
+    var resultdate = new Date(yourmilliseconds);
+    println("> Tempo di " + string + ": " + (System.nanoTime()-t0)/1000000000f + "s \t\t ( " + sdf.format(resultdate) + " )")
+
+  }
 
   /* PRODUCT */
   def startComputeProd(path: String, sc: SparkContext,LAMBDA: Int,ITER: Int, DEMO: Boolean, NUM_PARTITIONS: Int): Unit = {
@@ -174,7 +183,7 @@ object Util {
       * sarà pari a 0. Serve come supporto per le fasi successive
       */
       var orderLinks = partitionedRDD.flatMap { case (key, users) => users.map(p => (p, users.filter(
-        refUser => ((p.helpfulness > refUser.helpfulness || (p.idUser).eq(refUser.idUser)) && p.rating == refUser.rating)), key
+        refUser => (p.helpfulness > refUser.helpfulness || (p.idUser).eq(refUser.idUser)) && p.rating == refUser.rating), key
       ))
       }
       /*-------COLLEGAMENTI IN BASE AL VOTO E ALLA HELPFUL */
@@ -282,13 +291,12 @@ object Util {
       }
     }
     /* stampa del risultato su directory output */
-    result.coalesce(1,shuffle=true).saveAsTextFile(pathOutput)
+    result.coalesce(1,shuffle = true).saveAsTextFile(pathOutput)
 
 
   }
 
   /* GENERAL */
-
   def load_rdd_commFORusr(path: String, sc: SparkContext): RDD[(String, Iterable[UserComment])] = {
     val header = sc.textFile(path).first()
     val new_record = sc.textFile(path).filter(row => row!= header)
@@ -309,9 +317,8 @@ object Util {
     var t0 = System.nanoTime()
     val commentsForUsers = load_rdd_commFORusr(path, sc)
     /* Fase 0 Partizione per idUtente */
-    var rddCommForUsr = commentsForUsers.partitionBy(new CustomPartitioner(NUM_PARTITIONS, false)).persist()
+    var rddCommForUsr = commentsForUsers.partitionBy(new CustomPartitioner(NUM_PARTITIONS, false))
     rddCommForUsr.take(1).foreach( _ => getTime("load e part",t0))
-
     /*Fase 1: Calcolo helpful locale (media delle helpfulness di ogni utente)
     * con successivo ragguppamento per idArticolo */
 
@@ -326,12 +333,12 @@ object Util {
         var globalHelpful = hel / nhelp
         usrCommts.map(comm => (comm.idProd, usr, comm.rating, globalHelpful))
       }
-    }.persist()
+    }
     rddUserForProdNewHelpful.take(1).foreach( _ => getTime("calcolo helpfulness locale (F1)",t0))
 
     /* Fase 2: (join) raggruppamento per idProd */
     t0 = System.nanoTime()
-    var rddUserForProdGroup = rddUserForProdNewHelpful.groupBy(_._1).partitionBy(new CustomPartitioner(NUM_PARTITIONS, false)).persist()
+    var rddUserForProdGroup = rddUserForProdNewHelpful.groupBy(_._1).partitionBy(new CustomPartitioner(NUM_PARTITIONS, false))
     rddUserForProdGroup.take(1).foreach( _ => getTime("raggruppamento per idProd (F2)",t0))
 
     /* Fase 3: Calcolo link localmente
@@ -360,33 +367,35 @@ object Util {
       !! Vengono determinati i link e il rank degli utenti in base ai soli commenti
     */
     t0 = System.nanoTime()
-    val links1 = rddLocalLinkAndHelp.map {
-      case (usrHelp, list) => usrHelp._1 -> list.flatMap(_._2)
+    val links = rddLocalLinkAndHelp.map {
+      case (usrHelp, list) => usrHelp._1 -> (usrHelp._1 :: list.flatMap(_._2).toSet.toList) //.toSet per rimuovere i duplicati
     }.persist()
-    val links2 = links1.map(p => p._1 -> p._1)
-    val links = links2.join(links1).mapValues(p => List(p._1) ++ p._2 ).persist()
+
+    /*VECCHIO MODO POI CANCELLIAMO QUESTO*/
+    /* utilizzavamo links1 come struttura intermedia */
+//    links.collect().foreach(println)
+//    val links = links1.map(p => p._1 -> p._1).join(links1).mapValues(p => List(p._1) ++ p._2 ).persist()
+//    println("_______")
+//    links.collect().foreach(println)
+//    links.take(1).foreach(_ => getTime("calcolo dei links globali (F4)",t0))
+
+
 
     var ranks = rddLocalLinkAndHelp.map {
-      case (usrHelp, list) => {
-        usrHelp._1 -> usrHelp._2
-      }
+      case (usrHelp, list) => usrHelp._1 -> usrHelp._2
     }
-    links.take(1).foreach(_ => getTime("calcolo dei links globali (F4)",t0))
-
 
     if (DEMO) {
       /*nel caso generale il link non cambia mai
       * la stampa in links.json viene fatta solo qui */
       printLinksGeneral(links)
       var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
-      println("Stampa initial nodes")
       printNodes(jsonList,0)
     }
 
     /* Fase 5: inizio pageRank */
     for (i <- 1 to ITER) {
       t0 = System.nanoTime()
-      /* Ad ogni iterata stampa ranks.json i valori  solo demo Mode*/
       val contributions = links.join(ranks).flatMap {
         case (u, (uLinks, urank)) =>
           uLinks.map(t =>
@@ -401,8 +410,8 @@ object Util {
       ranks.take(1).foreach( _ => getTime("iterazione " + i,t0))
 
       if (DEMO) {
+        /* Ad ogni iterata stampa ranks.json i valori  solo demo Mode*/
         var jsonList = ranks.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
-        println(s"Stampa nodes iter ${i}")
         printNodes(jsonList,i)
         Thread.sleep(timeout)
       }
