@@ -102,12 +102,8 @@ object Util {
     println("#linksInitial#"+jsonString)
   }
 
-  def getResult(partitionedRDD: RDD[(String, Iterable[User])], iter:Int):Unit = {
-    if(iter==0){
-      println("Stampa initial nodes")
-    }else{
-      println(s"Stampa nodes iter ${iter}")
-    }
+  def getResult(partitionedRDD: RDD[(String, Iterable[User])], iter:Int, demo: Boolean,t0: Long ):Unit = {
+
 
     /* Stampa in nodes.json il rank relativo ad ogni user */
     var ranks = partitionedRDD.flatMap { case (idArt, users) => users.map(user => user.idUser -> user.helpfulness) }.groupByKey()
@@ -119,8 +115,19 @@ object Util {
       (idUser, sumHelpful / size)
     }
     }
-    var jsonList = result.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
-    printNodes(jsonList,iter)
+
+    if(iter > 0) result.take(1).foreach(_ => getTime("Iterazione "+ iter,t0))
+
+    if(demo){
+      if(iter==0 ){
+        println("Stampa initial nodes")
+      }else{
+        println(s"Stampa nodes iter ${iter}")
+      }
+      var jsonList = result.collect().map(u => userJson(u._1.replace("\"", ""), u._2))
+      printNodes(jsonList,iter)
+    }
+
   }
 
   def printResultRank(partitionedRDD: RDD[(String, Iterable[User])]): Unit = {
@@ -163,9 +170,9 @@ object Util {
   def computeProd(pRDD: RDD[(String, Iterable[User])], LAMBDA: Int, ITER: Int,demo: Boolean): Unit = {
     var partitionedRDD = pRDD
     var t0 = System.nanoTime()
-
-    if (demo) getResult(partitionedRDD,0)
+    getResult(partitionedRDD,0,demo,t0)
     for (i <- 1 to ITER) { // INIZIO ITER
+      t0 = System.nanoTime()
       /* Struttura intermedia fatta in tal modo :
       *  (UtenteDonatore X, UtentiRiceventi,idArticolo)
       * dove UtentiRiceventi è l'insieme degli utenti con helpfulness minore di X ma che
@@ -251,11 +258,10 @@ object Util {
 
       //stampa nel terminale per il flusso in nodejs solo la prima volta per avere la topologia della rete
       if (demo && i==1) printLinksProd(listaAdiacenza)
-      if(demo){
         //ad ogni fine iterazioni vengono stampati a video i rank
-        getResult(partitionedRDD,i)
-        Thread.sleep(timeout) //tempo al client di aggiornare la view
-      }
+      getResult(partitionedRDD,i,demo,t0)
+      if(demo) Thread.sleep(timeout) //tempo al client di aggiornare la view
+
 
 
     }/*fine ciclo*/
