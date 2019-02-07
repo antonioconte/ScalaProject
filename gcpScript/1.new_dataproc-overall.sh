@@ -37,7 +37,7 @@ do
 		if [ ${var_enter} == "2" ] #upload files
 		then
 			echo "upload"
-			./6.new_deploy-files.sh
+			6.new_deploy-files-folder.sh
 		else
 			if [ ${var_enter} == "3" ] #run a job
 			then
