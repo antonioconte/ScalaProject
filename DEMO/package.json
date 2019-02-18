@@ -1,0 +1,16 @@
+{
+  "id": "guihelpfulness",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.16.4",
+    "fs": "0.0.1-security",
+    "socket.io": "^2.2.0"
+  }
+}

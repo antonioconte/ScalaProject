@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/js/bootstrap.min.js"></script>
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.1/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+
+    <title>Helpfulness Rank</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/ranks.css">
+    <link rel="stylesheet" href="css/loading.css">
+</head>
+
+<body class="container-fluid">
+    <br>
+    <h3>Helpfulness Rank</h3>
+    <p id="numIter"><span class="adv-start"><b>AVVIA IL CLUSTER</b></span></p>
+
+    <ul class="nav nav-tabs">
+        <li class="active"><a data-toggle="tab" href="#view">View</a></li>
+        <li><a data-toggle="tab" href="#rankTab">RankList</a></li>
+    </ul>
+
+    <div class="tab-content">
+        <br>
+        <div id="view" class="tab-pane fade in active">
+
+            <div class="row">
+                <div class="col-md-9">
+                    <div class="loading hide sk-folding-cube">
+                        <div class="sk-cube1 sk-cube"></div>
+                        <div class="sk-cube2 sk-cube"></div>
+                        <div class="sk-cube4 sk-cube"></div>
+                        <div class="sk-cube3 sk-cube"></div>
+                    </div>
+
+                    <svg id="graph" width="1100" height="600"></svg>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label for="selectComp">Seleziona modalità:</label>
+                        <select class="form-control" id="selectComp"">
+                            <option value=" 0"></option>
+                            <option value="1">Prodotto</option>
+                            <option value="2">General</option>
+                        </select>
+                    </div>
+                    <div class="dropdown">
+                        <button class="btn btn-default dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown"
+                            aria-haspopup="true" aria-expanded="true">
+                            Menù <span class="caret"></span>
+                        </button>
+                        <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
+                            <li><a href="#" id="runJobLocal">Run Job (Local)</a></li>
+                            <li role="separator" class="divider"></li>
+                            <li><a href="#" id="makeBucket">Crea Bucket e Load File</a></li>
+                            <li><a href="#" class="makeCluster" value="3W">Create Cluster (1M 3W 2C)</a></li>
+                            <li><a href="#" class="makeCluster" value="7W">Create Cluster (1M 7W 1C)</a></li>
+                            <li><a href="#" id="runClusterJob">Avvia Job</a></li>
+                            <li><a href="#" id="removeCluster">Rimuovi Cluster</a></li>
+
+                        </ul>
+                    </div>
+
+                    <br>
+                    <span id="typeComp"></span>
+
+                    <p class="infoStatus">
+
+                    </p>
+
+                    <div class="alert alert-info" role="alert">
+                        <span id="userSelected"></span> ===>
+                        <b><span id="rankUserSelected"></span></b>
+                    </div>
+                    <form>
+                        <div class="input-group">
+                            <input type="text" id="searchUser" class="form-control" placeholder="Search User by ID">
+                            <div class="input-group-btn">
+                                <button id="btnSearchUser" class="btn btn-default" type="button">
+                                    <i class="glyphicon glyphicon-search"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <span>Per rimuovere la selezione cliccare di nuovo su cerca</span>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+        <div id="rankTab" class="tab-pane fade">
+            <br>
+
+            <div id="rankList"></div>
+        </div>
+    </div>
+
+
+
+    <script src="//d3js.org/d3.v3.min.js"></script>
+
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="global.js"></script>
+    <script src="app.js"></script>
+    <script src="graphics.js"></script>
+    <script src="ranks.js"></script>
+
+
+</body>
+
+</html>
