@@ -28,5 +28,5 @@ spark-submit --class Main /path-jar/HelpfulnessRank-assembly-0.1.jar PARA_LIST
 #### Esempio di Run
 ```
 spark-submit --class Main ./target/scala-2.12/HelpfulnessRank-assembly-0.1.jar \
-          Product True dataset/demo.csv result 20 10 7 3000
+          Product True dataInput/demo.csv result 20 10 7 3000
  ```
