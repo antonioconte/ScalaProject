@@ -93,15 +93,6 @@ object RankGeneral {
       case (usrHelp, list) => usrHelp._1 -> (usrHelp._1 :: list.flatMap(_._2).toSet.toList) //.toSet per rimuovere i duplicati
     }.persist()
 
-    /*VECCHIO MODO POI CANCELLIAMO QUESTO*/
-    /* utilizzavamo links1 come struttura intermedia */
-//    links.collect().foreach(println)
-//    val links = links1.map(p => p._1 -> p._1).join(links1).mapValues(p => List(p._1) ++ p._2 ).persist()
-//    println("_______")
-//    links.collect().foreach(println)
-
-
-
     var ranks = rddLocalLinkAndHelp.map {
       case (usrHelp, list) => usrHelp._1 -> usrHelp._2
     }
