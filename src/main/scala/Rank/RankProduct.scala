@@ -51,19 +51,25 @@ object RankProduct {
       *  (UtenteDonatore X, UtentiRiceventi,idArticolo)
       * dove UtentiRiceventi è l'insieme degli utenti con helpfulness minore di X ma che
       * hanno votato (rating) come X
-      *
       * la lista utentiRiceventi comprende anche l'user stesso il cui contributo a se stesso
-      * sarà pari a 0. Serve come supporto per le fasi successive
+      * sarà pari a 0. Serve come supporto per le fasi successive in quanto senza questo passaggio
+      * l'utente potrebbe essere scartato in quanto non ha alcun contributo da nessuno
       */
-      var orderLinks = partitionedRDD.flatMap { case (key, users) => users.map(p => (p, users.filter(
-        refUser => (p.helpfulness > refUser.helpfulness || (p.idUser).eq(refUser.idUser)) && p.rating == refUser.rating), key
+      val orderLinks = partitionedRDD.flatMap {
+        // idProd, user = RDD degli utenti relativi a quel prod
+        case (idProd, users) => users.map(usr => (
+          usr, //Utente donatore
+          users.filter(refUser => (usr.helpfulness > refUser.helpfulness || (usr.idUser).eq(refUser.idUser)) && usr.rating == refUser.rating), //lista utenti riceventi
+          idProd
       ))
       }
+
+
       /*-------COLLEGAMENTI IN BASE AL VOTO E ALLA HELPFUL */
       /* ogni utente "donatore" deve conoscere la sua helpfulness e la lista dei destinatari
       (X, (LISTADestinatari, Y, idArticolo) X deve dividere Y con LISTADestinatari relativo all'idArticolo
       tale struttura serve per il calcolo del contributo per ogni utente nella LISTADestinatari */
-      var listaAdiacenza = orderLinks.map(pair =>
+      val listaAdiacenza = orderLinks.map(pair =>
         pair._1.idUser -> (
           pair._2,
           pair._1.helpfulness,
@@ -72,19 +78,13 @@ object RankProduct {
       )
 
 
-      /* Ora si calcolano le coppie (ricevente, contributo)
-      ottenendo per ogni partizione la lista  di tale coppia <chiave,value>
-      dove la chiave è il ricevente che deve sommare alla propria helpfulness
-      un valore pari a value (contributo_ricevuto)
-      * */
+      /* Calcolo coppie : (UserRicevente, (contributo,idArt,helpfulnessUserRicevente,RatingUserRicevente))
+         il contributo verrà sommato alla helpfulnessUserRicevente nel prossimo passo */
+
       val contribs = listaAdiacenza.flatMap {
-        pair => { // per ogni coppia (Donatore,(ListaDest, myHelp)
-          val currentId = pair._1
-          val helpfulnessCurrent = pair._2._2
+        pair => { // per ogni coppia (Donatore,(ListaDest, HelpfulnessDonatore, idArt))
+          val (currentId,helpfulnessCurrent,idArt) = (pair._1, pair._2._2, pair._2._3)
           val E = pair._2._1.size - 1 //ogni lista contiene anche il contributo che l'user deve dare a se stesso (ossia 0)
-          //serve per ottenere la lista completa delle helpfulness
-          val idArt = pair._2._3
-          //     HowMuch? => myHelp/Lambda*|Nodi con helpfulness minori della mia|
           val contrib = if (E != 0) helpfulnessCurrent / (E * LAMBDA) else 0
           //se l'user è lo stesso allora il contributo è 0
           pair._2._1.map(userRicevente => userRicevente.idUser -> (
@@ -105,7 +105,7 @@ object RankProduct {
       * OTTENUTO DAL RAGGRUPPAMENTO
       */
       partitionedRDD = contribs.mapPartitions({ it =>
-        it.toList.groupBy(_._2._2).iterator
+        it.toList.groupBy(_._2._2).iterator // (UserRicevente, (contributo,idArt,helpfulnessUserRicevente,RatingUserRicevente))
           .map( // 1.
             x =>
               x._1 -> //idArt, x._2 è la lista degli user
@@ -115,25 +115,24 @@ object RankProduct {
                       var u = user.head //prendo il primo utente nella lista in quanto l'unico valore che varia
                     //è il contributo che verra accumulato dalla foldLeft per calcolare la nuova helpfulness
                     var userOldHelp = u._2._3 // helpfulness dell'user prima dell'update
-                    var newValue = user.foldLeft(userOldHelp) { // user ha questa struttura -> (idUser,(contributo,idArticolo,helpful,rating)
-                      case (acc, (idUser, (singleContr, idArt, help, rating))) => { // estraggo il valore del contributo e incremento acc
+                      val (idUser, rating) = (u._1,u._2._4)
+                      val newValue = user.foldLeft(userOldHelp) { // user ha questa struttura -> (idUser,(contributo,idArticolo,helpful,rating)
+                      case (acc, (_, (singleContr, _, _, _))) => { // estraggo il valore del contributo e incremento acc
                         var newHelp = acc + singleContr // che inizialmente è helpfulnessUtente
                         if (newHelp > 1.0) 1.0f
                         else if (newHelp < -1.0) -1.0f
                         else newHelp
                       }
                     }
-                      new User(u._1, u._2._4, newValue) //creo nuovo oggetto contenente le info necessarie per iniziare una nuova iterazione
+                      /* Nuovo oggetto contenente le info necessarie per iniziare una nuova iterazione */
+                      User(idUser, rating, newValue)
                     }
                   ).values //creo la lista degli oggetti utente
 
           )
       }, preservesPartitioning = true)
 
-        //Decommentare per il tempo alla fine di ogni iterata
-        //partitionedRDD.count()
-        //getTime("iterazione " + i,t0)
-    
+
       //stampa nel terminale per il flusso in nodejs solo la prima volta per avere la topologia della rete
       if (demo && i==1) printLinksProd(listaAdiacenza)
       if(demo){
