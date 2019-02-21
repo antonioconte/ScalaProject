@@ -32,7 +32,7 @@ spark-submit --class Main ./target/scala-2.12/HelpfulnessRank-assembly-0.1.jar \
  ```
  
  ## DEMO
- La demo è stata sviluppata nell'ambiente NodeJS (server-side) e D3.js per la view del grafo.
+ La demo è stata sviluppata nell'ambiente NodeJS (server-side) e D3.js per la view del grafo. Attraverso la WEB-UI è possibile lanciare gli script per la creazione del bucket ed il caricamento dei file, la creazione del cluster e l'avvio del job in base alla due modalità *Product* e *General*. All'interno degli script sono inserite le varibili d'accesso per la configurazione di *Google Cloud Platform*
  Per il run dell'applicazione posizionarsi all'interno del directory _DEMO_ e lanciare il comando
  ```
  node start
