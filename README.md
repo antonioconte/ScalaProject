@@ -30,3 +30,11 @@ spark-submit --class Main /path-jar/HelpfulnessRank-assembly-0.1.jar PARA_LIST
 spark-submit --class Main ./target/scala-2.12/HelpfulnessRank-assembly-0.1.jar \
           Product True dataInput/demo.csv result 20 10 7 3000
  ```
+ 
+ ## DEMO
+ La demo è stata sviluppata nell'ambiente NodeJS (server-side) e D3.js per la view del grafo.
+ Per il run dell'applicazione posizionarsi all'interno del directory _DEMO_ e lanciare il comando
+ ```
+ node start
+ ```
+ e successivamente aprire un broswer web all'url http://localhost:3000
