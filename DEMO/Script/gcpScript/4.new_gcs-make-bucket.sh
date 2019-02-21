@@ -1,5 +1,5 @@
 #!/bin/bash
-GCP_PROJECT_NAME=scala-project
+GCP_PROJECT_NAME=PROJECT-NAME	# <---- Inserire CUSTOMPROJECTNAME
 GCS_BUCKET_NAME=${GCP_PROJECT_NAME}-file-bucket
 GCS_BUCKET_ZONE=europe-west1
 GCS_BUCKET_CLASS=regional
