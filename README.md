@@ -38,3 +38,7 @@ spark-submit --class Main ./target/scala-2.12/HelpfulnessRank-assembly-0.1.jar \
  node start
  ```
  e successivamente aprire un broswer web all'url http://localhost:3000
+
+
+© 2019 Antonio Conteduca, Matteo Caputo, Pierluigi Lazazzera. Alma Mater Studiorum Università di Bologna
+
